@@ -8,7 +8,7 @@ public class Cell {
     public float Mass { get { return _mass; } }
     public float Size { get; }
     public float Area { get { return Size * Size; } }
-    public float Density { get { return _mass / Area } }
+    public float Density { get { return _mass / Area; } }
     public float Pressure { get; }
     public float[] Velocity { get; } // Velocity is assumed to be positioned at the center of the edges
 
@@ -48,7 +48,7 @@ public class Cell {
         Vector2 ratio = new Vector2(
             parcel.Position.x / Size,
             parcel.Position.y / Size
-        ); 
+        );
         float[] masses = new float[] {            
             parcel.Mass * (1f - ratio.x) * (1f - ratio.y),
             parcel.Mass * ratio.x * (1f - ratio.y),

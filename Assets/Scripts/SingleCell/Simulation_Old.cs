@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class Simulation : MonoBehaviour {
+public class SimulationOld : MonoBehaviour {
     private Parcel _parcel = new Parcel(
         new Vector2(5f, 9f),
         new Vector2(0.0f, -0.1f).normalized
