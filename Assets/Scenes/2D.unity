@@ -163,6 +163,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 54fe26b2abb041397a316f88632d512a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  DrawGrid: 1
+  DrawMassDistribution: 0
+  DrawMomentum: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
