@@ -66,7 +66,18 @@ public class Parcels {
         _mass = new NativeArray<float>(count, allocator);
         _affineState = new NativeArray<float2x2>(count, allocator);
 
-        _mass[0] = 5f;
+        // TODO: Remove, for test purposes only
+        for (int i = 0; i < count; ++i) {
+            _position[i] = new float2(
+                UnityEngine.Random.Range(0.2f, 7.8f),
+                UnityEngine.Random.Range(0.2f, 5.8f)
+            );
+            _velocity[i] = new float2(
+                UnityEngine.Random.Range(0.2f, 2f),
+                UnityEngine.Random.Range(0.2f, 2f)
+            );
+            _mass[i] = 1f;
+        }
     }
     
     /// <summary>

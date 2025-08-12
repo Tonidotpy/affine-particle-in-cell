@@ -15,7 +15,9 @@ public class APIC2DSimulation : MonoBehaviour {
     public bool DrawGrid = true;
     public bool DrawParcels = true;
     public bool DrawMassDistribution = false;
-    public bool DrawMomentum = false;
+    public bool DrawNodeMassDistribution = false;
+    public bool DrawNodeMomentum = false;
+    public bool DrawVelocity = false;
 
     /// <summary>
     /// Draw the Grid on the Editor for debug
@@ -72,20 +74,39 @@ public class APIC2DSimulation : MonoBehaviour {
         Gizmos.matrix = transform.localToWorldMatrix;
         for (int x = -1; x <= _grid.Size.x; ++x) {
             for (int y = -1; y <= _grid.Size.y; ++y) {
-                Vector2 pos = new Vector2(
+                Vector2 position = new Vector2(
                     math.mad(x, _grid.CellSize, _grid.CellSize * 0.5f),
                     math.mad(y, _grid.CellSize, _grid.CellSize * 0.5f)
                 );
+                // TODO: Normalize mass for color interpolation
                 Gizmos.color = Color.Lerp(
                     Color.blue,
                     Color.red,
                     _grid.Mass[math.mad(
-                        (x + 1),
-                        (_grid.Size.y + 2),
-                        (y + 1)
+                        x + 1,
+                        _grid.Size.y + 2,
+                        y + 1
                     )]
                 );
-                Gizmos.DrawSphere(pos, 0.1f);
+                Gizmos.DrawSphere(position, 0.1f);
+
+                if (DrawNodeMassDistribution && x >= 0 && y >= 0) {
+                    Vector2 nodePosition = new Vector2(
+                        x * _grid.CellSize,
+                        y * _grid.CellSize
+                    );
+                    // TODO: Normalize mass for color interpolation
+                    Gizmos.color = Color.Lerp(
+                        Color.blue,
+                        Color.red,
+                        _grid.NodeMass[math.mad(
+                            x,
+                            _grid.Size.y + 1,
+                            y
+                        )]
+                    );
+                    Gizmos.DrawCube(nodePosition, Vector2.one * 0.15f);
+                }
             }
         }
     }
@@ -93,7 +114,7 @@ public class APIC2DSimulation : MonoBehaviour {
     /// <summary>
     /// Draw the Grid momentum on the Editor for debug
     /// </summary>
-    private void DrawMomentumGizmos() {
+    private void DrawNodeMomentumGizmos() {
         Gizmos.matrix = transform.localToWorldMatrix;
         for (int x = 0; x <= _grid.Size.x; ++x) {
             for (int y = 0; y <= _grid.Size.y; ++y) {
@@ -103,11 +124,48 @@ public class APIC2DSimulation : MonoBehaviour {
                 );
                 int index = math.mad(x, _grid.Size.y + 1, y);
                 Vector2 dir = new Vector2(
-                    _grid.Momentum[index].x,
-                    _grid.Momentum[index].y
+                    _grid.NodeMomentum[index].x,
+                    _grid.NodeMomentum[index].y
                 );
                 Gizmos.color = Color.yellow;
                 Gizmos.DrawLine(pos, pos + dir);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draw Grid staggered velocities in the Editor for debug
+    /// </summary>
+    private void DrawVelocityGizmos() {
+        Gizmos.matrix = transform.localToWorldMatrix;
+        Gizmos.color = Color.yellow;
+        // Draw X staggered velocities
+        for (int x = 0; x < _grid.Size.x + 1; ++x) {
+            for (int y = 0; y < _grid.Size.y; ++y) {
+                Vector2 origin = new Vector2(
+                    x * _grid.CellSize,
+                    (y + 0.5f) * _grid.CellSize
+                );
+                int index = math.mad(x, _grid.Size.y, y);
+                Gizmos.DrawLine(
+                    origin,
+                    origin + Vector2.right * _grid.VelocityX[index]
+                );
+            }
+        }
+
+        // Draw X staggered velocities
+        for (int x = 0; x < _grid.Size.x; ++x) {
+            for (int y = 0; y < _grid.Size.y + 1; ++y) {
+                Vector2 origin = new Vector2(
+                    (x + 0.5f) * _grid.CellSize,
+                    y * _grid.CellSize
+                );
+                int index = math.mad(x, _grid.Size.y + 1, y);
+                Gizmos.DrawLine(
+                    origin,
+                    origin + Vector2.up * _grid.VelocityY[index]
+                );
             }
         }
     }
@@ -120,7 +178,8 @@ public class APIC2DSimulation : MonoBehaviour {
             if (DrawGrid) DrawGridGizmos();
             if (DrawParcels) DrawParcelsGizmos();
             if (DrawMassDistribution) DrawMassDistributionGizmos();
-            if (DrawMomentum) DrawMomentumGizmos();
+            if (DrawNodeMomentum) DrawNodeMomentumGizmos();
+            if (DrawVelocity) DrawVelocityGizmos();
         }
     }
 
@@ -129,12 +188,12 @@ public class APIC2DSimulation : MonoBehaviour {
     /// </summary>
     void OnEnable() {
         _grid = new StaggeredGrid(
-            new int2(5, 4),
+            new int2(4, 3),
             2,
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            1,
+            50,
             Allocator.Persistent
         );
     }
