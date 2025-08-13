@@ -60,6 +60,21 @@ public class StaggeredGrid {
     public float CellSize { get; }
     public float CellArea { get { return CellSize * CellSize; } }
 
+
+    /// <summary>
+    /// Get density of a single cell
+    /// </summary>
+    /// <para>
+    /// Cell index is clamped inside the Grid bounds, ghost layer included
+    /// </para>
+    /// <param name="index">The index of the Grid Cell (x, y)</param>
+    /// <returns>The Cell density</param>
+    public float GetCellDensity(int2 index) {
+        // Shift by one due to the ghost layer
+        index = math.clamp(index + 1, int2.zero, _size);
+        return Mass[math.mad(index.x, _size.y, index.y)] / CellArea;
+    }
+
     /// <summary>
     /// Staggered Grid constructor
     /// </summary>
@@ -320,5 +335,31 @@ public class StaggeredGrid {
                     (VelocityY[top] - VelocityY[bottom]);
             }
         }
+    }
+
+    /// <summary>
+    /// Correct Grid velocities to achieve a divergent-free behavior
+    /// </summary>
+    /// <param name="dt">The time step of the simulation</param>
+    public void CorrectVelocity(float dt) {
+        for (int i = 0; i < VelocityX.Length; ++i) {
+            int2 cellRight = new int2(i / Size.y, i % Size.y);
+            int2 cellLeft = cellRight - new int2(1, 0);
+            float density = (GetCellDensity(cellRight) + GetCellDensity(cellLeft)) * 0.5f;
+
+            int right = math.mad(cellRight.x + 1, _size.y, cellRight.y + 1);
+            int left = math.mad(cellLeft.x + 1, _size.y, cellLeft.y + 1);
+            VelocityX[i] -= dt / density * (Pressure[right] - Pressure[left]);
+        }
+
+        for (int i = 0; i < VelocityY.Length; ++i) {
+            int2 cellTop = new int2(i / (Size.y + 1), i % (Size.y + 1));
+            int2 cellBottom = cellTop - new int2(0, 1);
+            float density = (GetCellDensity(cellTop) + GetCellDensity(cellBottom)) * 0.5f;
+
+            int top = math.mad(cellTop.x + 1, _size.y, cellTop.y + 1);
+            int bottom = math.mad(cellBottom.x + 1, _size.y, cellBottom.y + 1);
+            VelocityY[i] -= dt / density * (Pressure[top] - Pressure[bottom]);
+        } 
     }
 }

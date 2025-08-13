@@ -169,6 +169,8 @@ MonoBehaviour:
   DrawNodeMassDistribution: 0
   DrawNodeMomentum: 0
   DrawVelocity: 0
+  DrawDivergence: 0
+  DrawPressure: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
