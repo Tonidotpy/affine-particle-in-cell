@@ -38,35 +38,27 @@ using UnityEngine;
 /// </para>
 public class StaggeredGrid {
     private int2 _size;
-    private NativeArray<float> _mass;
-    private NativeArray<float> _pressure;
-    private NativeArray<float> _velocityX;
-    private NativeArray<float> _velocityY;
+
+    public NativeArray<float> Mass;
+    public NativeArray<float> Pressure;
+    public NativeArray<float> VelocityX;
+    public NativeArray<float> VelocityY;
 
     /*
      * Auxiliary arrays used for momentum transfer
      * Momentum and mass are located at the Grid Nodes
      */
-    private NativeArray<float2> _nodeMomentum;
-    private NativeArray<float> _nodeMass;
+    public NativeArray<float2> NodeMomentum;
+    public NativeArray<float> NodeMass;
 
     /*
      * Auxiliary array used to store divergence used to solve the pressure problem
      */
-    private NativeArray<float> _divergence;
+    public NativeArray<float> Divergence;
 
     public int2 Size { get { return _size - 2; } }  // Size attribute excludes the "ghost Cells" layer
     public float CellSize { get; }
     public float CellArea { get { return CellSize * CellSize; } }
-
-    public NativeArray<float> Mass { get { return _mass; } }
-    public NativeArray<float> Pressure { get { return _pressure; } set { _pressure = value; } }
-    public NativeArray<float> VelocityX { get { return _velocityX; } }
-    public NativeArray<float> VelocityY { get { return _velocityY; } }
-
-    public NativeArray<float2> NodeMomentum { get { return _nodeMomentum; } }
-    public NativeArray<float> NodeMass { get { return _nodeMass; } }
-    public NativeArray<float> Divergence { get { return _divergence; } }
 
     /// <summary>
     /// Staggered Grid constructor
@@ -84,20 +76,20 @@ public class StaggeredGrid {
 
         // Only the center mass and pressure requires the ghost layer
         int area = _size.x * _size.y;
-        _mass = new NativeArray<float>(area, allocator);
-        _pressure = new NativeArray<float>(area, allocator);
+        Mass = new NativeArray<float>(area, allocator);
+        Pressure = new NativeArray<float>(area, allocator);
 
         int velocityXSize = (Size.x + 1) * Size.y;
         int velocityYSize = Size.x * (Size.y + 1);
-        _velocityX = new NativeArray<float>(velocityXSize, allocator);
-        _velocityY = new NativeArray<float>(velocityYSize, allocator);
+        VelocityX = new NativeArray<float>(velocityXSize, allocator);
+        VelocityY = new NativeArray<float>(velocityYSize, allocator);
 
         int nodes = (Size.x + 1) * (Size.y + 1);
-        _nodeMomentum = new NativeArray<float2>(nodes, allocator);
-        _nodeMass = new NativeArray<float>(nodes, allocator);
+        NodeMomentum = new NativeArray<float2>(nodes, allocator);
+        NodeMass = new NativeArray<float>(nodes, allocator);
 
         int boundedArea = Size.x * Size.y;
-        _divergence = new NativeArray<float>(boundedArea, allocator);
+        Divergence = new NativeArray<float>(boundedArea, allocator);
     }
     
     /// <summary>
@@ -105,14 +97,14 @@ public class StaggeredGrid {
     /// This method MUST be called at the end of the program to avoid memory leaks
     /// </summary>
     public void Dispose() {
-        if (_mass.IsCreated) _mass.Dispose();
-        if (_pressure.IsCreated) _pressure.Dispose();
-        if (_velocityX.IsCreated) _velocityX.Dispose();
-        if (_velocityY.IsCreated) _velocityY.Dispose();
+        if (Mass.IsCreated) Mass.Dispose();
+        if (Pressure.IsCreated) Pressure.Dispose();
+        if (VelocityX.IsCreated) VelocityX.Dispose();
+        if (VelocityY.IsCreated) VelocityY.Dispose();
 
-        if (_nodeMomentum.IsCreated) _nodeMomentum.Dispose();
-        if (_nodeMass.IsCreated) _nodeMass.Dispose();
-        if (_divergence.IsCreated) _divergence.Dispose();
+        if (NodeMomentum.IsCreated) NodeMomentum.Dispose();
+        if (NodeMass.IsCreated) NodeMass.Dispose();
+        if (Divergence.IsCreated) Divergence.Dispose();
     }
 
     /// <summary>
@@ -120,24 +112,24 @@ public class StaggeredGrid {
     /// </summary>
     public void Reset() { 
         unsafe {
-            long byteSize = _mass.Length * (long)UnsafeUtility.SizeOf<float>();
-            UnsafeUtility.MemClear(_mass.GetUnsafePtr(), byteSize);
+            long byteSize = Mass.Length * (long)UnsafeUtility.SizeOf<float>();
+            UnsafeUtility.MemClear(Mass.GetUnsafePtr(), byteSize);
         }
         unsafe {
-            long byteSize = _nodeMomentum.Length * (long)UnsafeUtility.SizeOf<float2>();
-            UnsafeUtility.MemClear(_nodeMomentum.GetUnsafePtr(), byteSize);
+            long byteSize = NodeMomentum.Length * (long)UnsafeUtility.SizeOf<float2>();
+            UnsafeUtility.MemClear(NodeMomentum.GetUnsafePtr(), byteSize);
         }
         unsafe {
-            long byteSize = _nodeMass.Length * (long)UnsafeUtility.SizeOf<float>();
-            UnsafeUtility.MemClear(_nodeMass.GetUnsafePtr(), byteSize);
+            long byteSize = NodeMass.Length * (long)UnsafeUtility.SizeOf<float>();
+            UnsafeUtility.MemClear(NodeMass.GetUnsafePtr(), byteSize);
         }
         unsafe {
-            long byteSize = _velocityX.Length * (long)UnsafeUtility.SizeOf<float>();
-            UnsafeUtility.MemClear(_velocityX.GetUnsafePtr(), byteSize);
+            long byteSize = VelocityX.Length * (long)UnsafeUtility.SizeOf<float>();
+            UnsafeUtility.MemClear(VelocityX.GetUnsafePtr(), byteSize);
         }
         unsafe {
-            long byteSize = _velocityY.Length * (long)UnsafeUtility.SizeOf<float>();
-            UnsafeUtility.MemClear(_velocityY.GetUnsafePtr(), byteSize);
+            long byteSize = VelocityY.Length * (long)UnsafeUtility.SizeOf<float>();
+            UnsafeUtility.MemClear(VelocityY.GetUnsafePtr(), byteSize);
         }
     }
 
@@ -179,7 +171,7 @@ public class StaggeredGrid {
                      t.x  *      t.y   // Top-Right
             };
             for (int j = 0; j < cellIndex.Length; ++j) {
-                _mass[cellIndex[j]] += weights[j] * parcels.Mass[i];
+                Mass[cellIndex[j]] += weights[j] * parcels.Mass[i];
             }
         }
     }
@@ -248,8 +240,8 @@ public class StaggeredGrid {
 
                 // Calculate mass distribution and momentum at the Nodes
                 float nodeMass = weights[j] * parcels.Mass[i];
-                _nodeMass[nodeIndex[j]] += nodeMass;
-                _nodeMomentum[nodeIndex[j]] += nodeMass * nodeVelocity;
+                NodeMass[nodeIndex[j]] += nodeMass;
+                NodeMomentum[nodeIndex[j]] += nodeMass * nodeVelocity;
             }
         }
     }
@@ -258,7 +250,7 @@ public class StaggeredGrid {
     /// Calculate velocity gradient of the grid
     /// </summary>
     public void CalculateVelocity() {
-        for (int i = 0; i < _velocityX.Length; ++i) {
+        for (int i = 0; i < VelocityX.Length; ++i) {
             /*
              * Get bottom Node velocity index
              */
@@ -267,20 +259,20 @@ public class StaggeredGrid {
             /*
              * Calculate velocity on the X staggered faces of the Grid
              */
-            float mass = _nodeMass[index] + _nodeMass[index + 1];
-            _velocityX[i] = (mass == 0f)
+            float mass = NodeMass[index] + NodeMass[index + 1];
+            VelocityX[i] = (mass == 0f)
                 ? 0f
-                : (_nodeMomentum[index].x + _nodeMomentum[index + 1].x) / mass;
+                : (NodeMomentum[index].x + NodeMomentum[index + 1].x) / mass;
         }
 
-        for (int i = 0; i < _velocityY.Length; ++i) {
+        for (int i = 0; i < VelocityY.Length; ++i) {
             /*
              * Calculate velocity on the Y staggered faces of the Grid
              */
-            float mass = _nodeMass[i] + _nodeMass[i + Size.y + 1];
-            _velocityY[i] = (mass == 0f)
+            float mass = NodeMass[i] + NodeMass[i + Size.y + 1];
+            VelocityY[i] = (mass == 0f)
                 ? 0f
-                : (_nodeMomentum[i].y + _nodeMomentum[i + Size.y + 1].y) / mass;
+                : (NodeMomentum[i].y + NodeMomentum[i + Size.y + 1].y) / mass;
         }
     }
 
@@ -290,12 +282,12 @@ public class StaggeredGrid {
     /// <param name="acceleration">The acceleration generated by the applied force</param>
     /// <param name="dt">The time step of the simulation</param>
     public void ApplyExternalForces(float2 acceleration, float dt) {
-        for (int i = 0; i < _velocityX.Length; ++i) {
-            _velocityX[i] += acceleration.x * dt;
+        for (int i = 0; i < VelocityX.Length; ++i) {
+            VelocityX[i] += acceleration.x * dt;
         }
 
-        for (int i = 0; i < _velocityY.Length; ++i) {
-            _velocityY[i] += acceleration.y * dt;
+        for (int i = 0; i < VelocityY.Length; ++i) {
+            VelocityY[i] += acceleration.y * dt;
         }
     }
 
@@ -304,12 +296,12 @@ public class StaggeredGrid {
     /// </summary>
     public void EnforceBoundaries() {
         for (int i = 0; i < Size.y; ++i) {
-            _velocityX[i] = 0f;
-            _velocityX[i + Size.y * Size.x] = 0f;
+            VelocityX[i] = 0f;
+            VelocityX[i + Size.y * Size.x] = 0f;
         }
         for (int i = 0; i < Size.x; ++i) {
-            _velocityY[i * Size.x] = 0f;
-            _velocityY[(i + 1) * Size.x - 1] = 0f;
+            VelocityY[i * Size.x] = 0f;
+            VelocityY[(i + 1) * Size.x - 1] = 0f;
         }
     }
 
@@ -324,8 +316,8 @@ public class StaggeredGrid {
                 int right = left + Size.y;
                 int bottom = index + x;
                 int top = bottom + 1;
-                _divergence[index] = (_velocityX[right] - _velocityX[left]) +
-                    (_velocityY[top] - _velocityY[bottom]);
+                Divergence[index] = (VelocityX[right] - VelocityX[left]) +
+                    (VelocityY[top] - VelocityY[bottom]);
             }
         }
     }

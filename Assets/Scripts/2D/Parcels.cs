@@ -39,16 +39,12 @@ using UnityEngine;
 /// </list>
 /// </para>
 public class Parcels {
-    private NativeArray<float2> _position;
-    private NativeArray<float2> _velocity;
-    private NativeArray<float> _mass;
-    private NativeArray<float2x2> _affineState;
+    public NativeArray<float2> Position;
+    public NativeArray<float2> Velocity;
+    public NativeArray<float> Mass;
+    public NativeArray<float2x2> AffineState;
 
     public int Count { get; }
-    public NativeArray<float2> Position { get { return _position; } }
-    public NativeArray<float2> Velocity { get { return _velocity; } }
-    public NativeArray<float> Mass { get { return _mass; } }
-    public NativeArray<float2x2> AffineState { get { return _affineState; } }
 
     /// <summary>
     /// Parcels constructor
@@ -61,22 +57,23 @@ public class Parcels {
     public Parcels(int count, Allocator allocator) {
         Count = count;
 
-        _position = new NativeArray<float2>(count, allocator);
-        _velocity = new NativeArray<float2>(count, allocator);
-        _mass = new NativeArray<float>(count, allocator);
-        _affineState = new NativeArray<float2x2>(count, allocator);
+        Position = new NativeArray<float2>(count, allocator);
+        Velocity = new NativeArray<float2>(count, allocator);
+        Mass = new NativeArray<float>(count, allocator);
+        AffineState = new NativeArray<float2x2>(count, allocator);
 
         // TODO: Remove, for test purposes only
+        UnityEngine.Random.InitState(0);
         for (int i = 0; i < count; ++i) {
-            _position[i] = new float2(
+            Position[i] = new float2(
                 UnityEngine.Random.Range(0.2f, 7.8f),
                 UnityEngine.Random.Range(0.2f, 5.8f)
             );
-            _velocity[i] = new float2(
+            Velocity[i] = new float2(
                 UnityEngine.Random.Range(-1f, 1f),
                 UnityEngine.Random.Range(-1f, 1f)
             );
-            _mass[i] = 1f;
+            Mass[i] = 1f;
         }
     }
     
@@ -85,9 +82,9 @@ public class Parcels {
     /// This method MUST be called at the end of the program to avoid memory leaks
     /// </summary>
     public void Dispose() {
-        if (_position.IsCreated) _position.Dispose();
-        if (_velocity.IsCreated) _velocity.Dispose();
-        if (_mass.IsCreated) _mass.Dispose();
-        if (_affineState.IsCreated) _affineState.Dispose();
+        if (Position.IsCreated) Position.Dispose();
+        if (Velocity.IsCreated) Velocity.Dispose();
+        if (Mass.IsCreated) Mass.Dispose();
+        if (AffineState.IsCreated) AffineState.Dispose();
     }
 }

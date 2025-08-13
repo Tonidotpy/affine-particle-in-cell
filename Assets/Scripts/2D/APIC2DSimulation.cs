@@ -9,8 +9,9 @@ using UnityEngine;
 /// Attach to an empty object to simulate a fluid in two dimensions
 /// </para>
 public class APIC2DSimulation : MonoBehaviour {
-    public StaggeredGrid _grid;
-    public Parcels _parcels;
+    private StaggeredGrid _grid;
+    private Parcels _parcels;
+    private GaussSeidelPressureSolver _pressureSolver;
 
     public bool DrawGrid = true;
     public bool DrawParcels = true;
@@ -19,6 +20,7 @@ public class APIC2DSimulation : MonoBehaviour {
     public bool DrawNodeMomentum = false;
     public bool DrawVelocity = false;
     public bool DrawDivergence = false;
+    public bool DrawPressure = false;
 
     /// <summary>
     /// Draw the Grid on the Editor for debug
@@ -186,10 +188,46 @@ public class APIC2DSimulation : MonoBehaviour {
                     (y + 0.5f) * _grid.CellSize
                 );
                 int index = math.mad(x, _grid.Size.y, y);
-                float t = Mathf.Abs(_grid.Divergence[index]);
+                float t = math.abs(_grid.Divergence[index]);
                 t = t / (t + 1);
                 const float alpha = 0.2f;
                 if (_grid.Divergence[index] < 0) {
+                    Gizmos.color = Color.Lerp(
+                        new Color(0, 0, 1f, alpha),
+                        new Color(0, 1f, 0, alpha),
+                        t
+                    );
+                }
+                else {
+                    Gizmos.color = Color.Lerp(
+                        new Color(0, 0, 1f, alpha),
+                        new Color(1f, 0, 0, alpha),
+                        t
+                    );
+                }
+                Gizmos.DrawCube(center, Vector2.one * _grid.CellSize);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draw Grid pressure in the Editor for debug
+    /// </summary>
+    private void DrawPressureGizmos() {
+        Gizmos.matrix = transform.localToWorldMatrix;
+        for (int x = -1; x <= _grid.Size.x; ++x) {
+            for (int y = -1; y <= _grid.Size.y; ++y) {
+                Vector2 center = new Vector2(
+                    (x + 0.5f) * _grid.CellSize,
+                    (y + 0.5f) * _grid.CellSize
+                );
+
+                // Normalize mass for color interpolation
+                int index = math.mad(x + 1, _grid.Size.y + 2, y + 1);
+                float t = math.abs(_grid.Pressure[index]);
+                t = t / (t + 1f);
+                const float alpha = 0.2f;
+                if (_grid.Pressure[index] < 0) {
                     Gizmos.color = Color.Lerp(
                         new Color(0, 0, 1f, alpha),
                         new Color(0, 1f, 0, alpha),
@@ -219,6 +257,7 @@ public class APIC2DSimulation : MonoBehaviour {
             if (DrawNodeMomentum) DrawNodeMomentumGizmos();
             if (DrawVelocity) DrawVelocityGizmos();
             if (DrawDivergence) DrawDivergenceGizmos();
+            if (DrawPressure) DrawPressureGizmos();
         }
     }
 
@@ -232,9 +271,10 @@ public class APIC2DSimulation : MonoBehaviour {
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            2,
+            3,
             Allocator.Persistent
         );
+        _pressureSolver = new GaussSeidelPressureSolver(5);
     }
 
     /// <summary>
@@ -270,8 +310,9 @@ public class APIC2DSimulation : MonoBehaviour {
     /// hence fluid volume conservation
     /// </summary>
     /// <param name="dt">The time step of the simulation</param>
-    private void ProjectPressure() {
+    private void ProjectPressure(float dt) {
         _grid.CalculateDivergence();
+        _pressureSolver.Solve(_grid, dt);
     }
 
     /// <summary>
@@ -280,6 +321,6 @@ public class APIC2DSimulation : MonoBehaviour {
     void FixedUpdate() {
         ParcelsToGrid();
         UpdateGrid(Time.fixedDeltaTime);
-        ProjectPressure();
+        ProjectPressure(Time.fixedDeltaTime);
     }
 }
