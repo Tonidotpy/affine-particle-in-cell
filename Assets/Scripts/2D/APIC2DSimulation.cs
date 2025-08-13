@@ -18,6 +18,7 @@ public class APIC2DSimulation : MonoBehaviour {
     public bool DrawNodeMassDistribution = false;
     public bool DrawNodeMomentum = false;
     public bool DrawVelocity = false;
+    public bool DrawDivergence = false;
 
     /// <summary>
     /// Draw the Grid on the Editor for debug
@@ -75,18 +76,20 @@ public class APIC2DSimulation : MonoBehaviour {
         for (int x = -1; x <= _grid.Size.x; ++x) {
             for (int y = -1; y <= _grid.Size.y; ++y) {
                 Vector2 position = new Vector2(
-                    math.mad(x, _grid.CellSize, _grid.CellSize * 0.5f),
-                    math.mad(y, _grid.CellSize, _grid.CellSize * 0.5f)
+                    (x + 0.5f) * _grid.CellSize,
+                    (y + 0.5f) * _grid.CellSize
                 );
-                // TODO: Normalize mass for color interpolation
+
+                // Normalize mass for color interpolation
+                float ratio = (_grid.Size.x + 2) * (_grid.Size.y + 2) / _parcels.Count;
+                ratio = 2 * ratio + 2;
+                int index = math.mad(x + 1, _grid.Size.y + 2, y + 1);
+                float t = _grid.Mass[index];
+                t = (t * ratio * 0.35f) / (t * ratio * 0.35f + 1f);
                 Gizmos.color = Color.Lerp(
                     Color.blue,
                     Color.red,
-                    _grid.Mass[math.mad(
-                        x + 1,
-                        _grid.Size.y + 2,
-                        y + 1
-                    )]
+                    t
                 );
                 Gizmos.DrawSphere(position, 0.1f);
 
@@ -95,15 +98,16 @@ public class APIC2DSimulation : MonoBehaviour {
                         x * _grid.CellSize,
                         y * _grid.CellSize
                     );
-                    // TODO: Normalize mass for color interpolation
+                    // Normalize mass for color interpolation
+                    ratio = _grid.Size.x * _grid.Size.y / _parcels.Count;
+                    ratio = 2 * ratio + 2;
+                    index = math.mad(x, _grid.Size.y + 1, y);
+                    t = _grid.NodeMass[index];
+                    t = (t * ratio * 0.35f) / (t * ratio * 0.35f + 1f);
                     Gizmos.color = Color.Lerp(
                         Color.blue,
                         Color.red,
-                        _grid.NodeMass[math.mad(
-                            x,
-                            _grid.Size.y + 1,
-                            y
-                        )]
+                        t
                     );
                     Gizmos.DrawCube(nodePosition, Vector2.one * 0.15f);
                 }
@@ -171,6 +175,40 @@ public class APIC2DSimulation : MonoBehaviour {
     }
 
     /// <summary>
+    /// Draw Grid divergence in the Editor for debug
+    /// </summary>
+    private void DrawDivergenceGizmos() {
+        Gizmos.matrix = transform.localToWorldMatrix;
+        for (int x = 0; x < _grid.Size.x; ++x) {
+            for (int y = 0; y < _grid.Size.y; ++y) {
+                Vector2 center = new Vector2(
+                    (x + 0.5f) * _grid.CellSize,
+                    (y + 0.5f) * _grid.CellSize
+                );
+                int index = math.mad(x, _grid.Size.y, y);
+                float t = Mathf.Abs(_grid.Divergence[index]);
+                t = t / (t + 1);
+                const float alpha = 0.2f;
+                if (_grid.Divergence[index] < 0) {
+                    Gizmos.color = Color.Lerp(
+                        new Color(0, 0, 1f, alpha),
+                        new Color(0, 1f, 0, alpha),
+                        t
+                    );
+                }
+                else {
+                    Gizmos.color = Color.Lerp(
+                        new Color(0, 0, 1f, alpha),
+                        new Color(1f, 0, 0, alpha),
+                        t
+                    );
+                }
+                Gizmos.DrawCube(center, Vector2.one * _grid.CellSize);
+            }
+        }
+    }
+
+    /// <summary>
     /// Draw visual debug information
     /// </summary>
     void OnDrawGizmos() {
@@ -180,6 +218,7 @@ public class APIC2DSimulation : MonoBehaviour {
             if (DrawMassDistribution) DrawMassDistributionGizmos();
             if (DrawNodeMomentum) DrawNodeMomentumGizmos();
             if (DrawVelocity) DrawVelocityGizmos();
+            if (DrawDivergence) DrawDivergenceGizmos();
         }
     }
 
@@ -193,7 +232,7 @@ public class APIC2DSimulation : MonoBehaviour {
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            10,
+            2,
             Allocator.Persistent
         );
     }
@@ -231,7 +270,9 @@ public class APIC2DSimulation : MonoBehaviour {
     /// hence fluid volume conservation
     /// </summary>
     /// <param name="dt">The time step of the simulation</param>
-    private void ProjectPressure() { }
+    private void ProjectPressure() {
+        _grid.CalculateDivergence();
+    }
 
     /// <summary>
     /// Main simulation loop

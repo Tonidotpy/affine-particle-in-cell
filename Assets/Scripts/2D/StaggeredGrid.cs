@@ -50,31 +50,23 @@ public class StaggeredGrid {
     private NativeArray<float2> _nodeMomentum;
     private NativeArray<float> _nodeMass;
 
+    /*
+     * Auxiliary array used to store divergence used to solve the pressure problem
+     */
+    private NativeArray<float> _divergence;
+
     public int2 Size { get { return _size - 2; } }  // Size attribute excludes the "ghost Cells" layer
     public float CellSize { get; }
     public float CellArea { get { return CellSize * CellSize; } }
 
     public NativeArray<float> Mass { get { return _mass; } }
-    public NativeArray<float> Pressure { get { return _pressure; } }
+    public NativeArray<float> Pressure { get { return _pressure; } set { _pressure = value; } }
     public NativeArray<float> VelocityX { get { return _velocityX; } }
     public NativeArray<float> VelocityY { get { return _velocityY; } }
 
     public NativeArray<float2> NodeMomentum { get { return _nodeMomentum; } }
     public NativeArray<float> NodeMass { get { return _nodeMass; } }
-
-    /// <summary>
-    /// Get the density of a single Cell
-    /// </summary>
-    /// <para>
-    /// If the given index is outside of the grid bounds the returned density
-    /// is the density of the nearest Cell
-    /// </para>
-    /// <param name="index">The coordinates of the Cell</param>
-    public float GetCellDensity(int2 index) {
-        // Shift by one due to the ghost layer
-        index = math.clamp(index + 1, int2.zero, _size);
-        return _mass[index.x * _size.y + index.y] / CellArea;
-    }
+    public NativeArray<float> Divergence { get { return _divergence; } }
 
     /// <summary>
     /// Staggered Grid constructor
@@ -103,6 +95,9 @@ public class StaggeredGrid {
         int nodes = (Size.x + 1) * (Size.y + 1);
         _nodeMomentum = new NativeArray<float2>(nodes, allocator);
         _nodeMass = new NativeArray<float>(nodes, allocator);
+
+        int boundedArea = Size.x * Size.y;
+        _divergence = new NativeArray<float>(boundedArea, allocator);
     }
     
     /// <summary>
@@ -117,6 +112,7 @@ public class StaggeredGrid {
 
         if (_nodeMomentum.IsCreated) _nodeMomentum.Dispose();
         if (_nodeMass.IsCreated) _nodeMass.Dispose();
+        if (_divergence.IsCreated) _divergence.Dispose();
     }
 
     /// <summary>
@@ -271,16 +267,20 @@ public class StaggeredGrid {
             /*
              * Calculate velocity on the X staggered faces of the Grid
              */
-            _velocityX[i] = (_nodeMomentum[index].x + _nodeMomentum[index + 1].x) /
-                (_nodeMass[index] + _nodeMass[index + 1]);
+            float mass = _nodeMass[index] + _nodeMass[index + 1];
+            _velocityX[i] = (mass == 0f)
+                ? 0f
+                : (_nodeMomentum[index].x + _nodeMomentum[index + 1].x) / mass;
         }
 
         for (int i = 0; i < _velocityY.Length; ++i) {
             /*
              * Calculate velocity on the Y staggered faces of the Grid
              */
-            _velocityY[i] = (_nodeMomentum[i].y + _nodeMomentum[i + Size.y + 1].y) /
-                (_nodeMass[i] + _nodeMass[i + Size.y + 1]); 
+            float mass = _nodeMass[i] + _nodeMass[i + Size.y + 1];
+            _velocityY[i] = (mass == 0f)
+                ? 0f
+                : (_nodeMomentum[i].y + _nodeMomentum[i + Size.y + 1].y) / mass;
         }
     }
 
@@ -310,6 +310,23 @@ public class StaggeredGrid {
         for (int i = 0; i < Size.x; ++i) {
             _velocityY[i * Size.x] = 0f;
             _velocityY[(i + 1) * Size.x - 1] = 0f;
+        }
+    }
+
+    /// <summary>
+    /// Calculate Grid divergence used to solve the pressure problem
+    /// </summary>
+    public void CalculateDivergence() {
+        for (int x = 0; x < Size.x; ++x) {
+            for (int y = 0; y < Size.y; ++y) {
+                int index = math.mad(x, Size.y, y);
+                int left = index;
+                int right = left + Size.y;
+                int bottom = index + x;
+                int top = bottom + 1;
+                _divergence[index] = (_velocityX[right] - _velocityX[left]) +
+                    (_velocityY[top] - _velocityY[bottom]);
+            }
         }
     }
 }
