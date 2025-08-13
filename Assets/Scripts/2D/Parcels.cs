@@ -73,8 +73,8 @@ public class Parcels {
                 UnityEngine.Random.Range(0.2f, 5.8f)
             );
             _velocity[i] = new float2(
-                UnityEngine.Random.Range(0.2f, 2f),
-                UnityEngine.Random.Range(0.2f, 2f)
+                UnityEngine.Random.Range(-1f, 1f),
+                UnityEngine.Random.Range(-1f, 1f)
             );
             _mass[i] = 1f;
         }

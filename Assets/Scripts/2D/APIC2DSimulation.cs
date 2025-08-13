@@ -193,7 +193,7 @@ public class APIC2DSimulation : MonoBehaviour {
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            50,
+            10,
             Allocator.Persistent
         );
     }
@@ -217,9 +217,28 @@ public class APIC2DSimulation : MonoBehaviour {
     }
 
     /// <summary>
+    /// 2. Update Grid information applying external forces an enforcing boundaries
+    /// </summary>
+    /// <param name="dt">The time step of the simulation</param>
+    private void UpdateGrid(float dt) {
+        float2 g = new float2(0, -9.81f);
+        _grid.ApplyExternalForces(g, dt);
+        _grid.EnforceBoundaries();
+    }
+
+    /// <summary>
+    /// 3. Project pressure to solve the Poisson equation and achieve zero divergence,
+    /// hence fluid volume conservation
+    /// </summary>
+    /// <param name="dt">The time step of the simulation</param>
+    private void ProjectPressure() { }
+
+    /// <summary>
     /// Main simulation loop
     /// </summary>
     void FixedUpdate() {
         ParcelsToGrid();
+        UpdateGrid(Time.fixedDeltaTime);
+        ProjectPressure();
     }
 }
