@@ -53,28 +53,28 @@ public class APIC2DSimulation : MonoBehaviour {
         Gizmos.color = Color.white;
         Gizmos.DrawWireCube(
             new Vector2(
-                _grid.Size.x * _grid.CellSize * 0.5f,
-                _grid.Size.y * _grid.CellSize * 0.5f
-            ),
+                _grid.BoundedSize.x,
+                _grid.BoundedSize.y
+            ) * (_grid.CellSize * 0.5f),
             new Vector2(
-                _grid.Size.x * _grid.CellSize,
-                _grid.Size.y * _grid.CellSize
-            )
+                _grid.BoundedSize.x,
+                _grid.BoundedSize.y
+            ) * _grid.CellSize
         );
 
         // Draw x lines
         Gizmos.color = new Color(0.2f, 0.2f, 0.2f);
-        for (int x = 1; x < _grid.Size.x; ++x) {
+        for (int x = 1; x < _grid.BoundedSize.x; ++x) {
             Gizmos.DrawLine(
                 new Vector2(x, 0) * _grid.CellSize,
-                new Vector2(x, _grid.Size.y) * _grid.CellSize
+                new Vector2(x, _grid.BoundedSize.y) * _grid.CellSize
             );
         }
         // Draw y lines
-        for (int y = 1; y < _grid.Size.y; ++y) {
+        for (int y = 1; y < _grid.BoundedSize.y; ++y) {
             Gizmos.DrawLine(
                 new Vector2(0, y) * _grid.CellSize,
-                new Vector2(_grid.Size.x, y) * _grid.CellSize
+                new Vector2(_grid.BoundedSize.x, y) * _grid.CellSize
             );
         }
     }
@@ -98,17 +98,17 @@ public class APIC2DSimulation : MonoBehaviour {
     /// </summary>
     private void DrawMassDistributionGizmos() {
         Gizmos.matrix = transform.localToWorldMatrix;
-        for (int x = -1; x <= _grid.Size.x; ++x) {
-            for (int y = -1; y <= _grid.Size.y; ++y) {
-                Vector2 position = new Vector2(
-                    (x + 0.5f) * _grid.CellSize,
-                    (y + 0.5f) * _grid.CellSize
-                );
+
+        // Draw center masses
+        for (int x = 0; x < _grid.Size.x; ++x) {
+            for (int y = 0; y < _grid.Size.y; ++y) {
+                Vector2 position = new Vector2(x - 0.5f, y - 0.5f);
+                position *= _grid.CellSize;
 
                 // Normalize mass for color interpolation
-                float ratio = (_grid.Size.x + 2) * (_grid.Size.y + 2) / _parcels.Count;
+                float ratio = _grid.Area / _parcels.Count;
                 ratio = 2 * ratio + 2;
-                int index = math.mad(x + 1, _grid.Size.y + 2, y + 1);
+                int index = math.mad(x, _grid.Size.y, y);
                 float t = _grid.Mass[index];
                 t = (t * ratio * 0.35f) / (t * ratio * 0.35f + 1f);
                 Gizmos.color = Color.Lerp(
@@ -117,17 +117,21 @@ public class APIC2DSimulation : MonoBehaviour {
                     t
                 );
                 Gizmos.DrawSphere(position, 0.1f);
+            }
+        }
 
-                if (DrawNodeMassDistribution && x >= 0 && y >= 0) {
-                    Vector2 nodePosition = new Vector2(
-                        x * _grid.CellSize,
-                        y * _grid.CellSize
-                    );
+        // Draw node masses
+        if (DrawNodeMassDistribution) {
+            for (int x = 0; x < _grid.Size.x + 1; ++x) {
+                for (int y = 0; y < _grid.Size.y + 1; ++y) {
+                    Vector2 nodePosition = new Vector2(x - 1f, y - 1f);
+                    nodePosition *= _grid.CellSize;
+
                     // Normalize mass for color interpolation
-                    ratio = _grid.Size.x * _grid.Size.y / _parcels.Count;
+                    float ratio = (_grid.Size.x + 1) * (_grid.Size.y + 1) / _parcels.Count;
                     ratio = 2 * ratio + 2;
-                    index = math.mad(x, _grid.Size.y + 1, y);
-                    t = _grid.NodeMass[index];
+                    int index = math.mad(x, _grid.Size.y + 1, y);
+                    float t = _grid.NodeMass[index];
                     t = (t * ratio * 0.35f) / (t * ratio * 0.35f + 1f);
                     Gizmos.color = Color.Lerp(
                         Color.blue,
@@ -145,19 +149,18 @@ public class APIC2DSimulation : MonoBehaviour {
     /// </summary>
     private void DrawNodeMomentumGizmos() {
         Gizmos.matrix = transform.localToWorldMatrix;
-        for (int x = 0; x <= _grid.Size.x; ++x) {
-            for (int y = 0; y <= _grid.Size.y; ++y) {
-                Vector2 pos = new Vector2(
-                    x * _grid.CellSize,
-                    y * _grid.CellSize 
-                );
+        for (int x = 0; x < _grid.Size.x + 1; ++x) {
+            for (int y = 0; y < _grid.Size.y + 1; ++y) {
+                Vector2 origin = new Vector2(x - 1f, y - 1f);
+                origin *= _grid.CellSize;
+
                 int index = math.mad(x, _grid.Size.y + 1, y);
                 Vector2 dir = new Vector2(
                     _grid.NodeMomentum[index].x,
                     _grid.NodeMomentum[index].y
                 );
                 Gizmos.color = Color.yellow;
-                Gizmos.DrawLine(pos, pos + dir);
+                Gizmos.DrawLine(origin, origin + dir);
             }
         }
     }
@@ -168,40 +171,39 @@ public class APIC2DSimulation : MonoBehaviour {
     private void DrawVelocityGizmos() {
         Gizmos.matrix = transform.localToWorldMatrix;
         Gizmos.color = Color.yellow;
+
         // Draw X staggered velocities
-        for (int x = 0; x < _grid.Size.x + 1; ++x) {
+        for (int x = 1; x < _grid.Size.x - 1; ++x) {
             for (int y = 0; y < _grid.Size.y; ++y) {
-                Vector2 origin = new Vector2(
-                    x * _grid.CellSize,
-                    (y + 0.5f) * _grid.CellSize
-                );
-                int index = math.mad(x, _grid.Size.y, y);
-                float magnitude = Mathf.Abs(_grid.VelocityX[index]);
+                Vector2 origin = new Vector2(x - 1f, y - 0.5f);
+                origin *= _grid.CellSize;
+
+                int index = math.mad(x - 1, _grid.Size.y, y);
+                float magnitude = math.abs(_grid.VelocityX[index]);
                 magnitude = magnitude / (magnitude + 1f);
                 if (_grid.VelocityX[index] < 0)
                     magnitude *= -1f;
                 Gizmos.DrawLine(
                     origin,
-                    origin + Vector2.right * magnitude * 0.5f
+                    origin + Vector2.right * (magnitude * 0.5f)
                 );
             }
         }
 
-        // Draw X staggered velocities
+        // Draw Y staggered velocities
         for (int x = 0; x < _grid.Size.x; ++x) {
-            for (int y = 0; y < _grid.Size.y + 1; ++y) {
-                Vector2 origin = new Vector2(
-                    (x + 0.5f) * _grid.CellSize,
-                    y * _grid.CellSize
-                );
-                int index = math.mad(x, _grid.Size.y + 1, y);
+            for (int y = 1; y < _grid.Size.y - 1; ++y) {
+                Vector2 origin = new Vector2(x - 0.5f, y - 1f);
+                origin *= _grid.CellSize;
+
+                int index = math.mad(x, _grid.BoundedSize.y + 1, y - 1);
                 float magnitude = Mathf.Abs(_grid.VelocityY[index]);
                 magnitude = magnitude / (magnitude + 1f);
                 if (_grid.VelocityY[index] < 0)
                     magnitude *= -1f;
                 Gizmos.DrawLine(
                     origin,
-                    origin + Vector2.up * magnitude * 0.5f
+                    origin + Vector2.up * (magnitude * 0.5f)
                 );
             }
         }
@@ -212,13 +214,12 @@ public class APIC2DSimulation : MonoBehaviour {
     /// </summary>
     private void DrawDivergenceGizmos() {
         Gizmos.matrix = transform.localToWorldMatrix;
-        for (int x = 0; x < _grid.Size.x; ++x) {
-            for (int y = 0; y < _grid.Size.y; ++y) {
-                Vector2 center = new Vector2(
-                    (x + 0.5f) * _grid.CellSize,
-                    (y + 0.5f) * _grid.CellSize
-                );
-                int index = math.mad(x, _grid.Size.y, y);
+        for (int x = 0; x < _grid.BoundedSize.x; ++x) {
+            for (int y = 0; y < _grid.BoundedSize.y; ++y) {
+                Vector2 center = new Vector2(x + 0.5f, y + 0.5f);
+                center *= _grid.CellSize;
+
+                int index = math.mad(x, _grid.BoundedSize.y, y);
                 float t = math.abs(_grid.Divergence[index]);
                 t = t / (t + 1);
                 const float alpha = 0.2f;
@@ -246,15 +247,13 @@ public class APIC2DSimulation : MonoBehaviour {
     /// </summary>
     private void DrawPressureGizmos() {
         Gizmos.matrix = transform.localToWorldMatrix;
-        for (int x = -1; x <= _grid.Size.x; ++x) {
-            for (int y = -1; y <= _grid.Size.y; ++y) {
-                Vector2 center = new Vector2(
-                    (x + 0.5f) * _grid.CellSize,
-                    (y + 0.5f) * _grid.CellSize
-                );
+        for (int x = 0; x < _grid.Size.x; ++x) {
+            for (int y = 0; y < _grid.Size.y; ++y) {
+                Vector2 center = new Vector2(x - 0.5f, y - 0.5f);
+                center *= _grid.CellSize;
 
                 // Normalize mass for color interpolation
-                int index = math.mad(x + 1, _grid.Size.y + 2, y + 1);
+                int index = math.mad(x, _grid.Size.y, y);
                 float t = math.abs(_grid.Pressure[index]);
                 t = t / (t + 1f);
                 const float alpha = 0.2f;
@@ -302,7 +301,7 @@ public class APIC2DSimulation : MonoBehaviour {
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            3,
+            1,
             Allocator.Persistent
         );
         _pressureSolver = new GaussSeidelPressureSolver(5);
@@ -350,7 +349,9 @@ public class APIC2DSimulation : MonoBehaviour {
     /// <summary>
     /// 4. Transfer Grid information to the Parcels
     /// </summary>
-    private void ParcelsToGrid() { } 
+    private void GridToParcels() {
+        // _parcels.UpdateVelocity(_grid);
+    } 
 
     /// <summary>
     /// Main simulation loop
@@ -358,7 +359,11 @@ public class APIC2DSimulation : MonoBehaviour {
     void FixedUpdate() {
         ParcelsToGrid();
         UpdateGrid(Time.fixedDeltaTime);
+        // TODO: Pressure projection not working properly
         ProjectPressure(Time.fixedDeltaTime);
-        GridToParcels();
+        
+        // TODO: Remove, used to check if the pressure projection is working correctly
+        _grid.CalculateDivergence();
+        // GridToParcels();
     }
 }

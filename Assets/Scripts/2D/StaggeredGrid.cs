@@ -37,8 +37,6 @@ using UnityEngine;
 /// </list>
 /// </para>
 public class StaggeredGrid {
-    private int2 _size;
-
     public NativeArray<float> Mass;
     public NativeArray<float> Pressure;
     public NativeArray<float> VelocityX;
@@ -56,7 +54,10 @@ public class StaggeredGrid {
      */
     public NativeArray<float> Divergence;
 
-    public int2 Size { get { return _size - 2; } }  // Size attribute excludes the "ghost Cells" layer
+    public int2 Size { get; }
+    public int2 BoundedSize { get { return Size - 2; } }
+    public int Area { get { return Size.x * Size.y; } }
+    public int BoundedArea { get { return BoundedSize.x * BoundedSize.y; } }
     public float CellSize { get; }
     public float CellArea { get { return CellSize * CellSize; } }
 
@@ -69,10 +70,11 @@ public class StaggeredGrid {
     /// </para>
     /// <param name="index">The index of the Grid Cell (x, y)</param>
     /// <returns>The Cell density</param>
-    public float GetCellDensity(int2 index) {
+    public float GetCellDensity(int2 cellIndex) {
         // Shift by one due to the ghost layer
-        index = math.clamp(index + 1, int2.zero, _size);
-        return Mass[math.mad(index.x, _size.y, index.y)] / CellArea;
+        cellIndex = math.clamp(cellIndex + 1, int2.zero, Size);
+        int index = math.mad(cellIndex.x, Size.y, cellIndex.y);
+        return Mass[index] / CellArea;
     }
 
     /// <summary>
@@ -85,17 +87,22 @@ public class StaggeredGrid {
     /// <param name="cellSize">Size of a single Cell of the Grid</param>
     /// <param name="allocator">The used memory allocator</param>
     public StaggeredGrid(int2 size, float cellSize, Allocator allocator) {
-        // Add a layer of "ghost Cells" around the grid
-        _size = size + 2;
+        /*
+         * To simply calculations and avoid conditional expresions for bound
+         * checking a "ghost layer" is added around the Grid
+         */
+        Size = size + 2;
         CellSize = cellSize;
+        Mass = new NativeArray<float>(Area, allocator);
+        Pressure = new NativeArray<float>(Area, allocator);
 
-        // Only the center mass and pressure requires the ghost layer
-        int area = _size.x * _size.y;
-        Mass = new NativeArray<float>(area, allocator);
-        Pressure = new NativeArray<float>(area, allocator);
-
-        int velocityXSize = (Size.x + 1) * Size.y;
-        int velocityYSize = Size.x * (Size.y + 1);
+        /*
+         * For the velocity the ghost layer is added only to the Y axis for the
+         * X velocity and X axis for the Y velocity since in the other direction
+         * they are not needed
+         */
+        int velocityXSize = (Size.x - 1) * Size.y;
+        int velocityYSize = Size.x * (Size.y - 1);
         VelocityX = new NativeArray<float>(velocityXSize, allocator);
         VelocityY = new NativeArray<float>(velocityYSize, allocator);
 
@@ -103,8 +110,8 @@ public class StaggeredGrid {
         NodeMomentum = new NativeArray<float2>(nodes, allocator);
         NodeMass = new NativeArray<float>(nodes, allocator);
 
-        int boundedArea = Size.x * Size.y;
-        Divergence = new NativeArray<float>(boundedArea, allocator);
+        /* Divergence does not need a ghost layer for the calculation */
+        Divergence = new NativeArray<float>(BoundedArea, allocator);
     }
     
     /// <summary>
@@ -174,10 +181,10 @@ public class StaggeredGrid {
              * based on the position of the Parcel
              */
             int[] cellIndex = new int[] {
-                 index.x      * _size.y +  index.y     , // Bottom-Left
-                (index.x + 1) * _size.y +  index.y     , // Bottom-Right
-                 index.x      * _size.y + (index.y + 1), // Top-Left
-                (index.x + 1) * _size.y + (index.y + 1)  // Top-Right
+                math.mad(index.x    , Size.y, index.y    ), // Bottom-Left
+                math.mad(index.x + 1, Size.y, index.y    ), // Bottom-Right
+                math.mad(index.x    , Size.y, index.y + 1), // Top-Left
+                math.mad(index.x + 1, Size.y, index.y + 1)  // Top-Right
             };
             float[] weights = new float[] {
                 (1 - t.x) * (1 - t.y), // Bottom-Left
@@ -204,54 +211,51 @@ public class StaggeredGrid {
              * of Cells that surround the Parcel
              * Shift by one due to the ghost layer
              */
-            int2 index = (int2)math.floor(rescaledParcelPosition);
+            int2 index = (int2)math.floor(rescaledParcelPosition + 1);
 
             /*
              * Calculate Parcel fractional position relative to the grid of Cell
              * centers, these values ranges from 0 to 1
              */
-            float2 t = rescaledParcelPosition - index;
+            float2 t = rescaledParcelPosition - (index - 1);
 
             /*
-             * Calculate bilinear interpolation weights based on Parcel position
+             * Distribute momentum over the Grid Cells via bilinear interpolation
+             * based on the position of the Parcel
              */
+            int2[] rescaledNodePosition = new int2[] {
+                (index -             1 ), // Bottom-Left
+                (index - new int2(0, 1)), // Bottom-Right
+                (index - new int2(1, 0)), // Top-Left
+                (index                 )  // Top-Right
+            };
+            int[] nodeIndex = new int[] {
+                math.mad(index.x    , Size.y + 1, index.y    ), // Bottom-Left
+                math.mad(index.x + 1, Size.y + 1, index.y    ), // Bottom-Right
+                math.mad(index.x    , Size.y + 1, index.y + 1), // Top-Left
+                math.mad(index.x + 1, Size.y + 1, index.y + 1)  // Top-Right
+            };
             float[] weights = new float[] {
                 (1 - t.x) * (1 - t.y), // Bottom-Left
                      t.x  * (1 - t.y), // Bottom-Right
                 (1 - t.x) *      t.y , // Top-Left
                      t.x  *      t.y   // Top-Right
             };
-            /*
-             * Calculate position of Cell nodes which enclose the Parcel
-             */
-            int2[] rescaledNodePosition = new int2[] {
-                (index                 ), // Bottom-Left
-                (index + new int2(1, 0)), // Bottom-Right
-                (index + new int2(0, 1)), // Top-Left
-                (index +             1 )  // Top-Right
-            };
-            int[] nodeIndex = new int[rescaledNodePosition.Length];
-            for (int j = 0; j < rescaledNodePosition.Length; ++j) {
-                nodeIndex[j] = math.mad(
-                    rescaledNodePosition[j].x,
-                    Size.y + 1,
-                    rescaledNodePosition[j].y
-                );
-            }
-
+            
             /*
              * Add weighted momentum to Grid Nodes
              */
             for (int j = 0; j < nodeIndex.Length; ++j) {
                 // Calculate velocity at node position
-                float2 nodeVelocity = parcels.Velocity[i] + math.mul(
-                    parcels.AffineState[i],
-                    math.mad(
-                        rescaledNodePosition[j],
-                        CellSize,
-                        -parcels.Position[i]
-                    )
-                );
+                float2 nodeVelocity = parcels.Velocity[i] +
+                    math.mul(
+                        parcels.AffineState[i],
+                        math.mad(
+                            rescaledNodePosition[j],
+                            CellSize,
+                            -parcels.Position[i]
+                        )
+                    );
 
                 // Calculate mass distribution and momentum at the Nodes
                 float nodeMass = weights[j] * parcels.Mass[i];
@@ -265,29 +269,36 @@ public class StaggeredGrid {
     /// Calculate velocity gradient of the grid
     /// </summary>
     public void CalculateVelocity() {
-        for (int i = 0; i < VelocityX.Length; ++i) {
-            /*
-             * Get bottom Node velocity index
-             */
-            int index = i + i / Size.y;
+        for (int x = 1; x < Size.x - 1; ++x) {
+            for (int y = 0; y < Size.y; ++y) {
+                int i = math.mad(x - 1, Size.y, y);
+                int bottomNode = math.mad(x, Size.y + 1, y);
+                int topNode = bottomNode + 1;
 
-            /*
-             * Calculate velocity on the X staggered faces of the Grid
-             */
-            float mass = NodeMass[index] + NodeMass[index + 1];
-            VelocityX[i] = (mass == 0f)
-                ? 0f
-                : (NodeMomentum[index].x + NodeMomentum[index + 1].x) / mass;
+                /*
+                 * Calculate velocity on the X staggered faces of the Grid
+                 */
+                float mass = NodeMass[bottomNode] + NodeMass[topNode];
+                VelocityX[i] = (mass == 0f)
+                    ? 0f
+                    : (NodeMomentum[bottomNode].x + NodeMomentum[topNode].x) / mass;
+            }
         }
 
-        for (int i = 0; i < VelocityY.Length; ++i) {
-            /*
-             * Calculate velocity on the Y staggered faces of the Grid
-             */
-            float mass = NodeMass[i] + NodeMass[i + Size.y + 1];
-            VelocityY[i] = (mass == 0f)
-                ? 0f
-                : (NodeMomentum[i].y + NodeMomentum[i + Size.y + 1].y) / mass;
+        for (int x = 0; x < Size.x; ++x) {
+            for (int y = 1; y < Size.y - 1; ++y) {
+                int i = math.mad(x, BoundedSize.y + 1, y - 1);
+                int leftNode = math.mad(x, Size.y + 1, y);
+                int rightNode = leftNode + Size.y + 1;
+
+                /*
+                 * Calculate velocity on the Y staggered faces of the Grid
+                 */
+                float mass = NodeMass[leftNode] + NodeMass[rightNode];
+                VelocityY[i] = (mass == 0f)
+                    ? 0f
+                    : (NodeMomentum[leftNode].y + NodeMomentum[rightNode].y) / mass;
+            }
         }
     }
 
@@ -310,13 +321,15 @@ public class StaggeredGrid {
     /// Enforce Grid boundaries by applying zero velocity at the Grid borders
     /// </summary>
     public void EnforceBoundaries() {
-        for (int i = 0; i < Size.y; ++i) {
-            VelocityX[i] = 0f;
-            VelocityX[i + Size.y * Size.x] = 0f;
+        for (int y = 0; y < Size.y; ++y) {
+            int left = y;
+            int right = math.mad(BoundedSize.x, Size.y, y);
+            VelocityX[left] = VelocityX[right] = 0f;
         }
-        for (int i = 0; i < Size.x; ++i) {
-            VelocityY[i * Size.x] = 0f;
-            VelocityY[(i + 1) * Size.x - 1] = 0f;
+        for (int x = 0; x < Size.x; ++x) {
+            int bottom = math.mad(x, BoundedSize.y + 1, 0);
+            int top = math.mad(x, BoundedSize.y + 1, BoundedSize.y);
+            VelocityY[bottom] = VelocityY[top] = 0f;
         }
     }
 
@@ -324,12 +337,12 @@ public class StaggeredGrid {
     /// Calculate Grid divergence used to solve the pressure problem
     /// </summary>
     public void CalculateDivergence() {
-        for (int x = 0; x < Size.x; ++x) {
-            for (int y = 0; y < Size.y; ++y) {
-                int index = math.mad(x, Size.y, y);
-                int left = index;
+        for (int x = 0; x < BoundedSize.x; ++x) {
+            for (int y = 0; y < BoundedSize.y; ++y) {
+                int index = math.mad(x, BoundedSize.y, y);
+                int left = math.mad(x, Size.y, y + 1);
                 int right = left + Size.y;
-                int bottom = index + x;
+                int bottom = math.mad(x + 1, BoundedSize.y + 1, y);
                 int top = bottom + 1;
                 Divergence[index] = (VelocityX[right] - VelocityX[left]) +
                     (VelocityY[top] - VelocityY[bottom]);
@@ -342,24 +355,36 @@ public class StaggeredGrid {
     /// </summary>
     /// <param name="dt">The time step of the simulation</param>
     public void CorrectVelocity(float dt) {
-        for (int i = 0; i < VelocityX.Length; ++i) {
-            int2 cellRight = new int2(i / Size.y, i % Size.y);
-            int2 cellLeft = cellRight - new int2(1, 0);
-            float density = (GetCellDensity(cellRight) + GetCellDensity(cellLeft)) * 0.5f;
-
-            int right = math.mad(cellRight.x + 1, _size.y, cellRight.y + 1);
-            int left = math.mad(cellLeft.x + 1, _size.y, cellLeft.y + 1);
-            VelocityX[i] -= dt / density * (Pressure[right] - Pressure[left]);
+        for (int x = 1; x < Size.x - 1; ++x) {
+            for (int y = 0; y < Size.y; ++y) {
+                int i = math.mad(x - 1, Size.y, y);
+                int2 cellRight = new int2(x - 1, y - 1);
+                int2 cellLeft = new int2(x - 2, y - 1);
+                float density = (GetCellDensity(cellRight) + GetCellDensity(cellLeft)) * 0.5f;
+                
+                int right = math.mad(x, Size.y, y);
+                int left = math.mad(x - 1, Size.y, y);
+                if (density == 0)
+                    VelocityX[i] = 0f;
+                else
+                    VelocityX[i] -= dt / density * (Pressure[right] - Pressure[left]);
+            }
         }
 
-        for (int i = 0; i < VelocityY.Length; ++i) {
-            int2 cellTop = new int2(i / (Size.y + 1), i % (Size.y + 1));
-            int2 cellBottom = cellTop - new int2(0, 1);
-            float density = (GetCellDensity(cellTop) + GetCellDensity(cellBottom)) * 0.5f;
+        for (int x = 0; x < Size.x; ++x) {
+            for (int y = 1; y < Size.y - 1; ++y) {
+                int i = math.mad(x, BoundedSize.y + 1, y - 1);
+                int2 cellTop = new int2(x - 1, y - 1);
+                int2 cellBottom = new int2(x - 1, y - 2);
+                float density = (GetCellDensity(cellTop) + GetCellDensity(cellBottom)) * 0.5f;
 
-            int top = math.mad(cellTop.x + 1, _size.y, cellTop.y + 1);
-            int bottom = math.mad(cellBottom.x + 1, _size.y, cellBottom.y + 1);
-            VelocityY[i] -= dt / density * (Pressure[top] - Pressure[bottom]);
+                int top = math.mad(x, Size.y, y);
+                int bottom = math.mad(x, Size.y, y - 1);
+                if (density == 0)
+                    VelocityY[i] = 0f;
+                else
+                    VelocityY[i] -= dt / density * (Pressure[top] - Pressure[bottom]);
+            }
         } 
     }
 }
