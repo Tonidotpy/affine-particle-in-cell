@@ -83,7 +83,7 @@ public class Parcels {
     
     /// <summary>
     /// Releases unmanaged memory
-    /// This method MUST be called at the end of the program to avoid memory leaks
+    /// This method MUST be calluied at the end of the program to avoid memory leaks
     /// </summary>
     public void Dispose() {
         if (Position.IsCreated) Position.Dispose();

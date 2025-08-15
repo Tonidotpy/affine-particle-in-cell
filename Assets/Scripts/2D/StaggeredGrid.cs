@@ -54,6 +54,7 @@ public class StaggeredGrid {
      */
     public NativeArray<float> Divergence;
 
+    public float Density { get; }
     public int2 Size { get; }
     public int2 BoundedSize { get { return Size - 2; } }
     public int Area { get { return Size.x * Size.y; } }
@@ -85,14 +86,22 @@ public class StaggeredGrid {
     /// </para>
     /// <param name="size">The size of the grid (width, height)</param>
     /// <param name="cellSize">Size of a single Cell of the Grid</param>
+    /// <param name="density">The fluid consant density</param>
     /// <param name="allocator">The used memory allocator</param>
-    public StaggeredGrid(int2 size, float cellSize, Allocator allocator) {
+    public StaggeredGrid(int2 size, float cellSize, float density, Allocator allocator) {
         /*
          * To simply calculations and avoid conditional expresions for bound
          * checking a "ghost layer" is added around the Grid
          */
         Size = size + 2;
         CellSize = cellSize;
+
+        /*
+         * Set costant density value to make pressure able to propagate through
+         * the air
+         */
+        Density = density;
+
         Mass = new NativeArray<float>(Area, allocator);
         Pressure = new NativeArray<float>(Area, allocator);
 
@@ -346,6 +355,7 @@ public class StaggeredGrid {
                 int top = bottom + 1;
                 Divergence[index] = (VelocityX[right] - VelocityX[left]) +
                     (VelocityY[top] - VelocityY[bottom]);
+                Divergence[index] /= CellSize;
             }
         }
     }
@@ -358,32 +368,22 @@ public class StaggeredGrid {
         for (int x = 1; x < Size.x - 1; ++x) {
             for (int y = 0; y < Size.y; ++y) {
                 int i = math.mad(x - 1, Size.y, y);
-                int2 cellRight = new int2(x - 1, y - 1);
-                int2 cellLeft = new int2(x - 2, y - 1);
-                float density = (GetCellDensity(cellRight) + GetCellDensity(cellLeft)) * 0.5f;
-                
                 int right = math.mad(x, Size.y, y);
                 int left = math.mad(x - 1, Size.y, y);
-                if (density == 0)
-                    VelocityX[i] = 0f;
-                else
-                    VelocityX[i] -= dt / density * (Pressure[right] - Pressure[left]);
+                float edgeDensity = Density * CellSize;
+                if (edgeDensity != 0)
+                    VelocityX[i] -= dt / edgeDensity * (Pressure[right] - Pressure[left]);
             }
         }
 
         for (int x = 0; x < Size.x; ++x) {
             for (int y = 1; y < Size.y - 1; ++y) {
                 int i = math.mad(x, BoundedSize.y + 1, y - 1);
-                int2 cellTop = new int2(x - 1, y - 1);
-                int2 cellBottom = new int2(x - 1, y - 2);
-                float density = (GetCellDensity(cellTop) + GetCellDensity(cellBottom)) * 0.5f;
-
                 int top = math.mad(x, Size.y, y);
                 int bottom = math.mad(x, Size.y, y - 1);
-                if (density == 0)
-                    VelocityY[i] = 0f;
-                else
-                    VelocityY[i] -= dt / density * (Pressure[top] - Pressure[bottom]);
+                float edgeDensity = Density * CellSize;
+                if (edgeDensity != 0)
+                    VelocityY[i] -= dt / edgeDensity * (Pressure[top] - Pressure[bottom]);
             }
         } 
     }

@@ -22,7 +22,7 @@ public class GaussSeidelPressureSolver {
     /// <param name="grid">The staggered Grid to solve the problem for</param>
     /// <param name="dt">The timestep of the simulation</param>
     public void Solve(StaggeredGrid grid, float dt) {
-        for (int i = 0; i < MaxIterations; ++i) {
+        for (int i = 0; i < MaxIterations;++i) {
             /*
              * Iterate over each Cell taking into account the "ghost layer"
              * around the Grid
@@ -33,15 +33,15 @@ public class GaussSeidelPressureSolver {
                     int boundedIndex = math.mad(x, grid.BoundedSize.y, y);
                     
                     // Calculate known value
-                    float b = grid.Mass[index] / dt * grid.Divergence[boundedIndex];
+                    float b = ((grid.Density * grid.CellArea) / dt) * grid.Divergence[boundedIndex];
 
                     // Calculate pressure value
                     int left = index - grid.Size.y;
                     int right = index + grid.Size.y;
                     int bottom = index - 1;
                     int top = index + 1;
-                    grid.Pressure[index] = ((grid.Pressure[left] + grid.Pressure[right] +
-                        grid.Pressure[bottom] + grid.Pressure[top]) - b) * 0.25f;
+                    grid.Pressure[index] = (grid.Pressure[left] + grid.Pressure[right] +
+                        grid.Pressure[bottom] + grid.Pressure[top] - b) * 0.25f;
                 }
             }
         }
