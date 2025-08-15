@@ -38,13 +38,14 @@ public class APIC2DSimulation : MonoBehaviour {
     private GaussSeidelPressureSolver _pressureSolver;
 
     public bool DrawGrid = true;
-    public bool DrawParcels = true;
     public bool DrawMassDistribution = false;
     public bool DrawNodeMassDistribution = false;
     public bool DrawNodeMomentum = false;
     public bool DrawVelocity = false;
     public bool DrawDivergence = false;
     public bool DrawPressure = false;
+    public bool DrawParcels = true;
+    public bool DrawParcelsVelocity = false;
 
     /// <summary>
     /// Draw the Grid on the Editor for debug
@@ -76,20 +77,6 @@ public class APIC2DSimulation : MonoBehaviour {
             Gizmos.DrawLine(
                 new Vector2(0, y) * _grid.CellSize,
                 new Vector2(_grid.BoundedSize.x, y) * _grid.CellSize
-            );
-        }
-    }
-
-    /// <summary>
-    /// Draw the Parcels on the Editor for debug
-    /// </summary>
-    private void DrawParcelsGizmos() {
-        Gizmos.matrix = transform.localToWorldMatrix;
-        Gizmos.color = Color.white;
-        foreach (float2 pos in _parcels.Position) {
-            Gizmos.DrawSphere(
-                new Vector2(pos.x, pos.y),
-                0.05f
             );
         }
     }
@@ -282,17 +269,48 @@ public class APIC2DSimulation : MonoBehaviour {
     }
 
     /// <summary>
+    /// Draw the Parcels on the Editor for debug
+    /// </summary>
+    private void DrawParcelsGizmos() {
+        Gizmos.matrix = transform.localToWorldMatrix;
+        Gizmos.color = Color.white;
+        foreach (float2 pos in _parcels.Position) {
+            Gizmos.DrawSphere(
+                new Vector2(pos.x, pos.y),
+                0.05f
+            );
+        }
+    }
+
+    /// <summary>
+    /// Draw the Parcels velocity on the Editor for debug
+    /// </summary>
+    private void DrawParcelsVelocityGizmos() {
+        Gizmos.matrix = transform.localToWorldMatrix;
+        Gizmos.color = Color.yellow;
+        for (int i = 0; i < _parcels.Count; ++i) {
+            Vector2 origin = new Vector2(_parcels.Position[i].x, _parcels.Position[i].y);
+            Vector2 dir = new Vector2(_parcels.Velocity[i].x, _parcels.Velocity[i].y);
+            Gizmos.DrawLine(origin, origin + dir);
+        }
+    }
+
+
+
+    /// <summary>
     /// Draw visual debug information
     /// </summary>
     void OnDrawGizmos() {
         if (Application.isPlaying) {
             if (DrawGrid) DrawGridGizmos();
-            if (DrawParcels) DrawParcelsGizmos();
             if (DrawMassDistribution) DrawMassDistributionGizmos();
             if (DrawNodeMomentum) DrawNodeMomentumGizmos();
             if (DrawVelocity) DrawVelocityGizmos();
             if (DrawDivergence) DrawDivergenceGizmos();
             if (DrawPressure) DrawPressureGizmos();
+
+            if (DrawParcels) DrawParcelsGizmos();
+            if (DrawParcelsVelocity) DrawParcelsVelocityGizmos();
         }
     }
 
@@ -356,7 +374,8 @@ public class APIC2DSimulation : MonoBehaviour {
     /// 4. Transfer Grid information to the Parcels
     /// </summary>
     private void GridToParcels() {
-        // _parcels.UpdateVelocity(_grid);
+        _parcels.UpdateVelocity(_grid);
+        _parcels.UpdateAffineState();
     } 
 
     /// <summary>

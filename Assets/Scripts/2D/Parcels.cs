@@ -95,13 +95,14 @@ public class Parcels {
     /// <summary>
     /// Update Parcels velocity
     /// </summary>
+    /// <param name="grid">The staggered Grid to take the velocity information from</param>
     public void UpdateVelocity(StaggeredGrid grid) {
         for (int i = 0; i < Count; ++i) {
             /*
              * Calculate Parcel fractional position relative to the grid of Cell
              * centers, these values ranges from 0 to 1
              */
-            float2 baseParcel = Position[i].x / grid.CellSize - 0.5f;
+            float2 baseParcel = Position[i] / grid.CellSize - 0.5f;
             int2 index = (int2)math.floor(baseParcel);
 
             /*
@@ -111,10 +112,19 @@ public class Parcels {
             float2 t = baseParcel - index;
 
             // TODO: Find velocity indices
-            float2 u00 = new float2(grid.VelocityX[0], grid.VelocityY[0]);
-            float2 u01 = new float2(grid.VelocityX[0], grid.VelocityY[0]);
-            float2 u10 = new float2(grid.VelocityX[0], grid.VelocityY[0]);
-            float2 u11 = new float2(grid.VelocityX[0], grid.VelocityY[0]);
+            int2 i00 = new int2(math.mad(index.x + 1, grid.Size.y, index.y),
+                math.mad(index.x, grid.BoundedSize.y + 1, index.y + 1));
+            int2 i01 = new int2(math.mad(index.x + 1, grid.Size.y, index.y + 1),
+                math.mad(index.x, grid.BoundedSize.y + 1, index.y + 2));
+            int2 i10 = new int2(math.mad(index.x + 2, grid.Size.y, index.y),
+                math.mad(index.x + 1, grid.BoundedSize.y + 1, index.y + 1));
+            int2 i11 = new int2(math.mad(index.x + 2, grid.Size.y, index.y + 1),
+                math.mad(index.x + 1, grid.BoundedSize.y + 1, index.y + 2));
+
+            float2 u00 = new float2(grid.VelocityX[i00.x], grid.VelocityY[i00.y]);
+            float2 u01 = new float2(grid.VelocityX[i01.x], grid.VelocityY[i01.y]);
+            float2 u10 = new float2(grid.VelocityX[i10.x], grid.VelocityY[i10.y]);
+            float2 u11 = new float2(grid.VelocityX[i11.x], grid.VelocityY[i11.y]);
             
             /*
              * Update velocity using bilinear interpolation base on Parcel
@@ -126,5 +136,13 @@ public class Parcels {
                 t.yy
             );
         }
+    }
+
+    /// <summary>
+    /// Update Parcels affine state matrix
+    /// </summary>
+    /// <param name="grid">The staggered Grid to take the velocity information from</param>
+    public void UpdateAffineState(StaggeredGrid grid) {
+
     }
 }
