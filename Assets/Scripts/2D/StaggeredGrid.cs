@@ -255,7 +255,10 @@ public class StaggeredGrid {
              * Add weighted momentum to Grid Nodes
              */
             for (int j = 0; j < nodeIndex.Length; ++j) {
-                // Calculate velocity at node position
+                /*
+                 * Calculate velocity at node position for the Runge-Kutta 2 (RK2)
+                 * integration method (midpoint method)
+                 */
                 float2 nodeVelocity = parcels.Velocity[i] +
                     math.mul(
                         parcels.AffineState[i],

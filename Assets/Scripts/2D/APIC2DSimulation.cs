@@ -325,10 +325,11 @@ public class APIC2DSimulation : MonoBehaviour {
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            1,
+            10,
+            0.1f,
             Allocator.Persistent
         );
-        _pressureSolver = new GaussSeidelPressureSolver(10);
+        _pressureSolver = new GaussSeidelPressureSolver(20);
     }
 
     /// <summary>
@@ -381,7 +382,9 @@ public class APIC2DSimulation : MonoBehaviour {
     /// <summary>
     /// 5. Update Parcels position based on their velocities (Advection)
     /// </summary>
-    private void AdvectParcels() { } 
+    private void AdvectParcels() {
+        _parcels.Move(_grid, Time.fixedDeltaTime);
+    } 
 
     /// <summary>
     /// Main simulation loop
@@ -391,5 +394,6 @@ public class APIC2DSimulation : MonoBehaviour {
         UpdateGrid(Time.fixedDeltaTime);
         ProjectPressure(Time.fixedDeltaTime);
         GridToParcels();
+        AdvectParcels();
     }
 }

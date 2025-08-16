@@ -45,6 +45,7 @@ public class Parcels {
     public NativeArray<float2x2> AffineState;
 
     public int Count { get; }
+    public float Friction { get; }
 
     /// <summary>
     /// Parcels constructor
@@ -53,9 +54,14 @@ public class Parcels {
     /// It allocates unmanaged memory
     /// </para>
     /// <param name="count">The total number of particles</param>
+    /// <param name="friction">
+    /// Friction used to reduce velocity of Parcels colliding with the Grid
+    /// bounds. It is a number from 0 to 1.
+    /// </param>
     /// <param name="allocator">The used memory allocator</param>
-    public Parcels(int count, Allocator allocator) {
+    public Parcels(int count, float friction, Allocator allocator) {
         Count = count;
+        Friction = friction;
 
         Position = new NativeArray<float2>(count, allocator);
         Velocity = new NativeArray<float2>(count, allocator);
@@ -65,19 +71,19 @@ public class Parcels {
         // TODO: Remove, for test purposes only
         UnityEngine.Random.InitState(0);
         for (int i = 0; i < count; ++i) {
-            // Position[i] = new float2(
-            //     UnityEngine.Random.Range(0.2f, 7.8f),
-            //     UnityEngine.Random.Range(0.2f, 5.8f)
-            // );
-            // Velocity[i] = new float2(
-            //     UnityEngine.Random.Range(-1f, 1f),
-            //     UnityEngine.Random.Range(-1f, 1f)
-            // );
+            Position[i] = new float2(
+                UnityEngine.Random.Range(0.2f, 7.8f),
+                UnityEngine.Random.Range(0.2f, 5.8f)
+            );
+            Velocity[i] = new float2(
+                UnityEngine.Random.Range(-1f, 1f),
+                UnityEngine.Random.Range(-1f, 1f)
+            );
             Mass[i] = 1f;
         }
-        Position[0] = new float2(3, 3);
+        // Position[0] = new float2(3, 3);
         // Position[1] = new float2(7, 3);
-        Velocity[0] = new float2(0, 1);
+        // Velocity[0] = new float2(0, 1);
         // Velocity[1] = new float2(1, 0);
     }
     
@@ -99,27 +105,39 @@ public class Parcels {
     public void UpdateVelocity(StaggeredGrid grid) {
         for (int i = 0; i < Count; ++i) {
             /*
-             * Calculate Parcel fractional position relative to the grid of Cell
-             * centers, these values ranges from 0 to 1
+             * Calculate indices of the Bottom-Left Cell enclosing the Parcel
+             * and its fractional position for the interpolation
              */
-            float2 baseParcel = Position[i] / grid.CellSize + 0.5f;
-            int2 index = (int2)math.floor(baseParcel) - 1;
-            float2 t = baseParcel - index;
+            float2 parcelX = Position[i] / grid.CellSize + new float2(0, 1f);
+            int2 indexX = (int2)math.floor(parcelX);
+            float2 tX = parcelX - indexX;
 
             /*
-             * Get X and Y velocities of the box of Cells surrounding the Parcel
+             * Get X velocities of the box of Cells surrounding the Parcel
              */
             float2x2 ux = new float2x2();
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int j = math.mad(index.x + x, grid.Size.y, index.y + y);
+                    int j = math.mad(indexX.x + x, grid.Size.y, indexX.y + y);
                     ux[x][y] = grid.VelocityX[j];
                 }
             }
+
+            /*
+             * Calculate Parcel fractional position relative to the grid of Cell
+             * centers, these values ranges from 0 to 1
+             */
+            float2 parcelY = Position[i] / grid.CellSize + new float2(1f, 0);
+            int2 indexY = (int2)math.floor(parcelY);
+            float2 tY = parcelY - indexY;
+
+            /*
+             * Get Y velocities of the box of Cells surrounding the Parcel
+             */
             float2x2 uy = new float2x2();
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int j = math.mad(index.x + x, grid.BoundedSize.y + 1, index.y + y);
+                    int j = math.mad(indexY.x + x, grid.BoundedSize.y + 1, indexY.y + y);
                     uy[x][y] = grid.VelocityY[j];
                 }
             }
@@ -130,14 +148,14 @@ public class Parcels {
              */
             Velocity[i] = new float2(
                 math.lerp(
-                    math.lerp(ux[0][0], ux[1][0], t.x),
-                    math.lerp(ux[0][1], ux[1][1], t.x),
-                    t.y
+                    math.lerp(ux[0][0], ux[1][0], tX.x),
+                    math.lerp(ux[0][1], ux[1][1], tX.x),
+                    tX.y
                 ),
                 math.lerp(
-                    math.lerp(uy[0][0], uy[1][0], t.x),
-                    math.lerp(uy[0][1], uy[1][1], t.x),
-                    t.y
+                    math.lerp(uy[0][0], uy[1][0], tY.x),
+                    math.lerp(uy[0][1], uy[1][1], tY.x),
+                    tY.y
                 )
             );
         }
@@ -153,14 +171,13 @@ public class Parcels {
              *              CHANGE IN X VELOCITY ALONG X DIRECTION
              *****************************************************************/
 
-
             /*
              * Calculate indices of the Bottom-Left Cell enclosing the Parcel
              * and its fractional position for the interpolation
              */
-            float2 baseParcel = Position[i] / grid.CellSize + 0.5f;
-            int2 index = (int2)math.floor(baseParcel) - 1;
-            float2 t = baseParcel - index;
+            float2 parcelX = Position[i] / grid.CellSize + new float2(0, 1f);
+            int2 indexX = (int2)math.floor(parcelX);
+            float2 tX = parcelX - indexX;
 
             /*
              * Calculate X velocity gradient for the four Cells surrounding
@@ -169,20 +186,28 @@ public class Parcels {
             float2x2 dx = new float2x2();
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int left = math.mad(index.x + x, grid.Size.y, index.y + y);
-                    int right = math.mad(index.x + x + 1, grid.Size.y, index.y + y);
+                    int left = math.mad(indexX.x + x, grid.Size.y, indexX.y + y);
+                    int right = math.mad(indexX.x + x + 1, grid.Size.y, indexX.y + y);
                     dx[x][y] = (grid.VelocityX[right] - grid.VelocityX[left]) / grid.CellSize;
                 }
             }
             float C00 = math.lerp(
-                math.lerp(dx[0][0], dx[1][0], t.x),
-                math.lerp(dx[0][1], dx[1][1], t.x),
-                t.y
+                math.lerp(dx[0][0], dx[1][0], tX.x),
+                math.lerp(dx[0][1], dx[1][1], tX.x),
+                tX.y
             );
 
             /******************************************************************
              *              CHANGE IN Y VELOCITY ALONG Y DIRECTION
              *****************************************************************/
+
+            /*
+             * Calculate indices of the Bottom-Left Cell enclosing the Parcel
+             * and its fractional position for the interpolation
+             */
+            float2 parcelY = Position[i] / grid.CellSize + new float2(1f, 0);
+            int2 indexY = (int2)math.floor(parcelY);
+            float2 tY = parcelY - indexY;
 
             /*
              * Calculate Y velocity gradient for the four Cells surrounding
@@ -191,15 +216,15 @@ public class Parcels {
             float2x2 dy = new float2x2();
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int bottom = math.mad(index.x + x, grid.BoundedSize.y + 1, index.y + y);
-                    int top = math.mad(index.x + x, grid.BoundedSize.y + 1, index.y + y + 1);
+                    int bottom = math.mad(indexY.x + x, grid.BoundedSize.y + 1, indexY.y + y);
+                    int top = math.mad(indexY.x + x, grid.BoundedSize.y + 1, indexY.y + y + 1);
                     dy[x][y] = (grid.VelocityY[top] - grid.VelocityY[bottom]) / grid.CellSize;
                 }
             }
             float C11 = math.lerp(
-                math.lerp(dy[0][0], dy[1][0], t.x),
-                math.lerp(dy[0][1], dy[1][1], t.x),
-                t.y
+                math.lerp(dy[0][0], dy[1][0], tY.x),
+                math.lerp(dy[0][1], dy[1][1], tY.x),
+                tY.y
             );
 
             /******************************************************************
@@ -211,8 +236,8 @@ public class Parcels {
              * Parcel placed slightly above the current Parcel and its
              * fractional position for the interpolation
              */
-            float2 parcelTop = baseParcel + new float2(0, 0.5f);
-            int2 indexTop = (int2)math.floor(parcelTop) - 1;
+            float2 parcelTop = parcelX + new float2(0, 0.5f);
+            int2 indexTop = (int2)math.floor(parcelTop);
             float2 tTop = parcelTop - indexTop;
 
             /*
@@ -236,8 +261,8 @@ public class Parcels {
              * Parcel placed slightly below the current Parcel and its
              * fractional position for the interpolation
              */
-            float2 parcelBottom = baseParcel - new float2(0, 0.5f);
-            int2 indexBottom = (int2)math.floor(parcelBottom) - 1;
+            float2 parcelBottom = parcelX - new float2(0, 0.5f);
+            int2 indexBottom = (int2)math.floor(parcelBottom);
             float2 tBottom = parcelBottom - indexBottom;
 
             /*
@@ -266,8 +291,8 @@ public class Parcels {
              * Parcel placed slightly to the right the current Parcel and its
              * fractional position for the interpolation
              */
-            float2 parcelRight = baseParcel + new float2(0.5f, 0);
-            int2 indexRight = (int2)math.floor(parcelRight) - 1;
+            float2 parcelRight = parcelY + new float2(0.5f, 0);
+            int2 indexRight = (int2)math.floor(parcelRight);
             float2 tRight = parcelRight - indexRight;
 
             /*
@@ -291,8 +316,8 @@ public class Parcels {
              * Parcel placed slightly to the left of the current Parcel and its
              * fractional position for the interpolation
              */
-            float2 parcelLeft = baseParcel - new float2(0.5f, 0);
-            int2 indexLeft = (int2)math.floor(parcelLeft) - 1;
+            float2 parcelLeft = parcelY - new float2(0.5f, 0);
+            int2 indexLeft = (int2)math.floor(parcelLeft);
             float2 tLeft = parcelLeft - indexLeft;
 
             /*
@@ -314,6 +339,40 @@ public class Parcels {
 
             /* Update affine matrix with calculated values */
             AffineState[i] = new float2x2(C00, C01, C10, C11);
+        }
+    }
+
+    /// <summary>
+    /// Update Parcels position based on their velocities
+    /// </summary>
+    /// <param name="grid">The staggered Grid to take the information from</param>
+    /// <param name="dt">The time step of the simulation</param>
+    public void Move(StaggeredGrid grid, float dt) {
+        for (int i = 0; i < Count; ++i) {
+            float2 v = Velocity[i];
+            /* Calculate midpoint velocity */
+            float2 vMid = v + math.mul(
+                AffineState[i],
+                Velocity[i] * dt * 0.5f // Half-Step
+            );
+            float2 pos = Position[i] + vMid * dt;
+
+            /* Correct the Parcel position if outside of the Grid bounds */
+            float2 size = (float2)grid.BoundedSize * grid.CellSize;
+            pos = math.clamp(pos, 0, size);
+            
+            /* Correct the Parcel velocity if outside of the Grid bounds */
+            if (pos.x < 0 || pos.x > size.x) {
+                v.x = 0;
+                v.y *= (1f - Friction);
+            }
+            if (pos.y < 0 || pos.y > size.y) {
+                v.x *= (1f - Friction);
+                v.y = 0;
+            }
+
+            Position[i] = pos;
+            Velocity[i] = v;
         }
     }
 }
