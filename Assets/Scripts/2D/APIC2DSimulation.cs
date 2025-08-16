@@ -375,8 +375,13 @@ public class APIC2DSimulation : MonoBehaviour {
     /// </summary>
     private void GridToParcels() {
         _parcels.UpdateVelocity(_grid);
-        _parcels.UpdateAffineState();
+        _parcels.UpdateAffineState(_grid);
     } 
+
+    /// <summary>
+    /// 5. Update Parcels position based on their velocities (Advection)
+    /// </summary>
+    private void AdvectParcels() { } 
 
     /// <summary>
     /// Main simulation loop
