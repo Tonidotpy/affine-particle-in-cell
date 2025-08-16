@@ -161,15 +161,16 @@ public class APIC2DSimulation : MonoBehaviour {
         Gizmos.color = Color.yellow;
 
         // Draw X staggered velocities
-        for (int x = 1; x < _grid.Size.x - 1; ++x) {
+        for (int x = 0; x < _grid.Size.x + 1; ++x) {
             for (int y = 0; y < _grid.Size.y; ++y) {
                 Vector2 origin = new Vector2(x - 1f, y - 0.5f);
                 origin *= _grid.CellSize;
 
-                int index = math.mad(x - 1, _grid.Size.y, y);
-                float magnitude = math.abs(_grid.VelocityX[index]);
+                int index = math.mad(x, _grid.Size.y, y);
+                float v = _grid.VelocityX[index];
+                float magnitude = math.abs(v);
                 magnitude = magnitude / (magnitude + 1f);
-                if (_grid.VelocityX[index] < 0)
+                if (v < 0)
                     magnitude *= -1f;
                 Gizmos.DrawLine(
                     origin,
@@ -180,14 +181,15 @@ public class APIC2DSimulation : MonoBehaviour {
 
         // Draw Y staggered velocities
         for (int x = 0; x < _grid.Size.x; ++x) {
-            for (int y = 1; y < _grid.Size.y; ++y) {
+            for (int y = 0; y < _grid.Size.y + 1; ++y) {
                 Vector2 origin = new Vector2(x - 0.5f, y - 1f);
                 origin *= _grid.CellSize;
 
-                int index = math.mad(x, _grid.BoundedSize.y + 1, y - 1);
-                float magnitude = Mathf.Abs(_grid.VelocityY[index]);
+                int index = math.mad(x, _grid.Size.y + 1, y);
+                float v = _grid.VelocityY[index];
+                float magnitude = Mathf.Abs(v);
                 magnitude = magnitude / (magnitude + 1f);
-                if (_grid.VelocityY[index] < 0)
+                if (v < 0)
                     magnitude *= -1f;
                 Gizmos.DrawLine(
                     origin,
@@ -325,7 +327,7 @@ public class APIC2DSimulation : MonoBehaviour {
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            10,
+            30,
             0.1f,
             Allocator.Persistent
         );
