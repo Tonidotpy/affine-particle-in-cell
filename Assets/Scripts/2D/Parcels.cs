@@ -79,12 +79,9 @@ public class Parcels {
                 UnityEngine.Random.Range(-1f, 1f),
                 UnityEngine.Random.Range(-1f, 1f)
             );
+            // Velocity[i] = new float2(1, 0);
             Mass[i] = 1f;
         }
-        // Position[0] = new float2(3f, 3f);
-        // Position[1] = new float2(7, 3);
-        // Velocity[0] = new float2(0, 1);
-        // Velocity[1] = new float2(1, 0);
     }
     
     /// <summary>
@@ -150,13 +147,13 @@ public class Parcels {
              */
             Velocity[i] = new float2(
                 math.lerp(
-                    math.lerp(ux[0][0], ux[1][0], tX.x),
-                    math.lerp(ux[0][1], ux[1][1], tX.x),
+                    math.lerp(ux[1][1], ux[0][1], tX.x),
+                    math.lerp(ux[1][0], ux[0][0], tX.x),
                     tX.y
                 ),
                 math.lerp(
-                    math.lerp(uy[0][0], uy[1][0], tY.x),
-                    math.lerp(uy[0][1], uy[1][1], tY.x),
+                    math.lerp(uy[1][1], uy[0][1], tY.x),
+                    math.lerp(uy[1][0], uy[0][0], tY.x),
                     tY.y
                 )
             );
@@ -168,6 +165,7 @@ public class Parcels {
     /// </summary>
     /// <param name="grid">The staggered Grid to take the velocity information from</param>
     public void UpdateAffineState(StaggeredGrid grid) {
+        // TODO: Fix affine update
         for (int i = 0; i < Count; ++i) {
             /*
              * Calculate indices of the Bottom-Left Cell of the 2x2 box
@@ -345,16 +343,14 @@ public class Parcels {
         for (int i = 0; i < Count; ++i) {
             float2 v = Velocity[i];
             /* Calculate midpoint velocity */
-            float2 vMid = v + math.mul(
-                AffineState[i],
-                Velocity[i] * dt * 0.5f // Half-Step
-            );
-            float2 pos = Position[i] + vMid * dt;
-
-            /* Correct the Parcel position if outside of the Grid bounds */
+            // float2 vMid = v + math.mul(
+            //     AffineState[i],
+            //     v * dt * 0.5f // Half-Step
+            // );
+            // float2 pos = Position[i] + vMid * dt;
+            // TODO: Switch from Euler integration to Runge-Kutta 2 integration method for better stability
+            float2 pos = Position[i] + v * dt;
             float2 size = (float2)grid.BoundedSize * grid.CellSize;
-            float epsilon = grid.CellSize * 0.01f;
-            pos = math.clamp(pos, 0, size - epsilon);
             
             /* Correct the Parcel velocity if outside of the Grid bounds */
             if (pos.x < 0 || pos.x > size.x) {
@@ -366,8 +362,13 @@ public class Parcels {
                 v.y = 0;
             }
 
+            /* Correct the Parcel position if outside of the Grid bounds */
+            float epsilon = 0f; // grid.CellSize * 0.01f;
+            pos = math.clamp(pos, epsilon, size - epsilon);
+
             Position[i] = pos;
             Velocity[i] = v;
+            // Debug.Log(i + ": " + Velocity[i].y);
         }
     }
 }

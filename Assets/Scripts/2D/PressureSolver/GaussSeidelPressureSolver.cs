@@ -33,7 +33,7 @@ public class GaussSeidelPressureSolver {
                     int boundedIndex = math.mad(x, grid.BoundedSize.y, y);
                     
                     // Calculate known value
-                    float b = ((grid.Density * grid.CellArea) / dt) * grid.Divergence[boundedIndex];
+                    float b = (grid.Mass[index] / (grid.CellArea * dt)) * grid.Divergence[boundedIndex];
 
                     // Calculate pressure value
                     int left = index - grid.Size.y;

@@ -44,10 +44,12 @@ public class StaggeredGrid {
 
     /*
      * Auxiliary arrays used for momentum transfer
-     * Momentum and mass are located at the Grid Nodes
+     * Momentum and mass are located at the Grid edges
      */
-    public NativeArray<float2> NodeMomentum;
-    public NativeArray<float> NodeMass;
+    public NativeArray<float> MassX;
+    public NativeArray<float> MassY;
+    public NativeArray<float> MomentumX;
+    public NativeArray<float> MomentumY;
 
     /*
      * Auxiliary array used to store divergence used to solve the pressure problem
@@ -89,14 +91,14 @@ public class StaggeredGrid {
         Mass = new NativeArray<float>(Area, allocator);
         Pressure = new NativeArray<float>(Area, allocator);
 
-        int velocityXSize = (Size.x + 1) * Size.y;
-        int velocityYSize = Size.x * (Size.y + 1);
-        VelocityX = new NativeArray<float>(velocityXSize, allocator);
-        VelocityY = new NativeArray<float>(velocityYSize, allocator);
-
-        int nodes = (Size.x + 1) * (Size.y + 1);
-        NodeMomentum = new NativeArray<float2>(nodes, allocator);
-        NodeMass = new NativeArray<float>(nodes, allocator);
+        int edgeCountX = (Size.x + 1) * Size.y;
+        int edgeCountY = Size.x * (Size.y + 1);
+        VelocityX = new NativeArray<float>(edgeCountX, allocator);
+        VelocityY = new NativeArray<float>(edgeCountY, allocator);
+        MassX = new NativeArray<float>(edgeCountX, allocator);
+        MassY = new NativeArray<float>(edgeCountY, allocator);
+        MomentumX = new NativeArray<float>(edgeCountX, allocator);
+        MomentumY = new NativeArray<float>(edgeCountY, allocator);
 
         /* Divergence does not need a ghost layer for the calculation */
         Divergence = new NativeArray<float>(BoundedArea, allocator);
@@ -111,14 +113,15 @@ public class StaggeredGrid {
         if (Pressure.IsCreated) Pressure.Dispose();
         if (VelocityX.IsCreated) VelocityX.Dispose();
         if (VelocityY.IsCreated) VelocityY.Dispose();
-
-        if (NodeMomentum.IsCreated) NodeMomentum.Dispose();
-        if (NodeMass.IsCreated) NodeMass.Dispose();
+        if (MassX.IsCreated) MassX.Dispose();
+        if (MassY.IsCreated) MassY.Dispose();
+        if (MomentumX.IsCreated) MomentumX.Dispose();
+        if (MomentumY.IsCreated) MomentumY.Dispose();
         if (Divergence.IsCreated) Divergence.Dispose();
     }
 
     /// <summary>
-    /// Resets grid masses and velocity values
+    /// Resets grid mass and velocity values
     /// </summary>
     public void Reset() { 
         unsafe {
@@ -126,12 +129,20 @@ public class StaggeredGrid {
             UnsafeUtility.MemClear(Mass.GetUnsafePtr(), byteSize);
         }
         unsafe {
-            long byteSize = NodeMomentum.Length * (long)UnsafeUtility.SizeOf<float2>();
-            UnsafeUtility.MemClear(NodeMomentum.GetUnsafePtr(), byteSize);
+            long byteSize = MassX.Length * (long)UnsafeUtility.SizeOf<float>();
+            UnsafeUtility.MemClear(MassX.GetUnsafePtr(), byteSize);
         }
         unsafe {
-            long byteSize = NodeMass.Length * (long)UnsafeUtility.SizeOf<float>();
-            UnsafeUtility.MemClear(NodeMass.GetUnsafePtr(), byteSize);
+            long byteSize = MassY.Length * (long)UnsafeUtility.SizeOf<float>();
+            UnsafeUtility.MemClear(MassY.GetUnsafePtr(), byteSize);
+        }
+        unsafe {
+            long byteSize = MomentumX.Length * (long)UnsafeUtility.SizeOf<float2>();
+            UnsafeUtility.MemClear(MomentumX.GetUnsafePtr(), byteSize);
+        }
+        unsafe {
+            long byteSize = MomentumY.Length * (long)UnsafeUtility.SizeOf<float2>();
+            UnsafeUtility.MemClear(MomentumY.GetUnsafePtr(), byteSize);
         }
         unsafe {
             long byteSize = VelocityX.Length * (long)UnsafeUtility.SizeOf<float>();
@@ -184,50 +195,85 @@ public class StaggeredGrid {
     /// </summary>
     /// <param name="parcels">The parcel which mass need to be transfered</param>
     public void TransferMomentum(Parcels parcels) {
+        // TODO: Store temporarely momentum inside velocity vector to save memory
         for (int i = 0; i < parcels.Count; ++i) {
             /*
-             * Calculate the index of the bottom-left Cell inside the 2x2 block
-             * of Cells that surround the Parcel
-             * Shift by one due to the ghost layer
+             * Calculate Parcel position and Bottom-Left Node of the Staggered
+             * Grid for the X axis
+             * Offset by one is added due to the ghost layer
              */
-            float2 offsetParcel = parcels.Position[i] / CellSize + 1;
-            int2 bottomLeftCell = (int2)math.floor(offsetParcel);
+            float2 parcelPositionX = parcels.Position[i] / CellSize + new float2(1f, 0.5f);
+            int2 bottomLeftNodeX = (int2)math.floor(parcelPositionX);
+            float2 fractionalPositionX = parcelPositionX - bottomLeftNodeX;
 
             /*
-             * Calculate Parcel fractional position relative to the grid of Cell
-             * centers, these values ranges from 0 to 1
-             */
-            float2 fractionalPosition = offsetParcel - bottomLeftCell;
-
-            /*
-             * Distribute momentum over the Grid Cells via bilinear interpolation
-             * based on the position of the Parcel
+             * Calculate mass and momentum on the X axis of the staggered Grid
              */
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int nodeIndex = math.mad(bottomLeftCell.x + x, Size.y + 1, bottomLeftCell.y + y);
-                    float weight = 1;
-                    weight *= (x == 0) ? (1f - fractionalPosition.x) : fractionalPosition.x;
-                    weight *= (y == 0) ? (1f - fractionalPosition.y) : fractionalPosition.y;
+                    /* Calculate staggered Node position and index */
+                    int2 nodeIndexX = bottomLeftNodeX + new int2(x, y);
+                    float2 nodePositionX = (float2)nodeIndexX * CellSize;
+                    int index = math.mad(nodeIndexX.x, Size.y, nodeIndexX.y);
 
                     /*
-                     * Calculate velocity at node position using the Parcel
-                     * affine matrix
+                     * Calculate weight based on Parcel position inside the
+                     * staggered Cell
                      */
-                    float2 nodeVelocity = parcels.Velocity[i] +
-                        math.mul(
-                            parcels.AffineState[i],
-                            math.mad(
-                                new float2(bottomLeftCell.x + x, bottomLeftCell.y + y),
-                                CellSize,
-                                -parcels.Position[i]
-                            )
-                        );
+                    float weight = 1;
+                    weight *= (x == 0) ? (1f - fractionalPositionX.x) : fractionalPositionX.x;
+                    weight *= (y == 0) ? (1f - fractionalPositionX.y) : fractionalPositionX.y;
 
-                    // Calculate mass distribution and momentum at the Cell Nodes
-                    float nodeMass = weight * parcels.Mass[i];
-                    NodeMass[nodeIndex] += nodeMass;
-                    NodeMomentum[nodeIndex] += nodeMass * nodeVelocity;
+                    /*
+                     * Calculate mass and momentum on the edges of the Cell
+                     */
+                    float mass = parcels.Mass[i] * weight;
+                    float dv = math.mul(
+                        parcels.AffineState[i][0],
+                        nodePositionX - parcels.Position[i]
+                    );
+                    MassX[index] += mass;
+                    MomentumX[index] += mass * (parcels.Velocity[i].x + dv);
+                }
+            }
+
+            /*
+             * Calculate Parcel position and Bottom-Left Node of the Staggered
+             * Grid for the Y axis
+             * Offset by one is added due to the ghost layer
+             */
+            float2 parcelPositionY = parcels.Position[i] / CellSize + new float2(0.5f, 1f);
+            int2 bottomLeftNodeY = (int2)math.floor(parcelPositionY);
+            float2 fractionalPositionY = parcelPositionY - bottomLeftNodeY;
+
+            /*
+             * Calculate mass and momentum on the Y axis of the staggered Grid
+             */
+            for (int x = 0; x < 2; ++x) {
+                for (int y = 0; y < 2; ++y) {
+                    /* Calculate staggered Node position and index */
+                    int2 nodeIndexY = bottomLeftNodeY + new int2(x, y);
+                    float2 nodePositionY = (float2)nodeIndexY * CellSize;
+                    int index = math.mad(nodeIndexY.x, Size.y + 1, nodeIndexY.y);
+
+                    /*
+                     * Calculate weight based on Parcel position inside the
+                     * staggered Cell
+                     */
+                    float weight = 1;
+                    weight *= (x == 0) ? (1f - fractionalPositionY.x) : fractionalPositionY.x;
+                    weight *= (y == 0) ? (1f - fractionalPositionY.y) : fractionalPositionY.y;
+
+                    /*
+                     * Calculate mass and momentum on the edges of the Cell
+                     */
+                    float mass = parcels.Mass[i] * weight;
+                    float dv = math.mul(
+                        parcels.AffineState[i][1],
+                        nodePositionY - parcels.Position[i]
+                    );
+                    MassY[index] += mass;
+                    MomentumY[index] += mass * (parcels.Velocity[i].y + dv);
                 }
             }
         }
@@ -237,39 +283,23 @@ public class StaggeredGrid {
     /// Calculate velocity gradient of the grid
     /// </summary>
     public void CalculateVelocity() {
+        /*
+         * Calculate staggered X velocity
+         */
         for (int x = 0; x < Size.x + 1; ++x) {
             for (int y = 0; y < Size.y; ++y) {
-                /*
-                 * Calculate indiceso for the Cell vertical edge and adjacent
-                 * nodes
-                 */
                 int i = math.mad(x, Size.y, y);
-                int bottomNode = math.mad(x, Size.y + 1, y);
-                int topNode = math.mad(x, Size.y + 1, y + 1);
-
-                /*
-                 * Calculate velocity on the X staggered faces of the Grid
-                 */
-                float mass = NodeMass[bottomNode] + NodeMass[topNode];
-                VelocityX[i] = (mass == 0f)
-                    ? 0f
-                    : (NodeMomentum[bottomNode].x + NodeMomentum[topNode].x) / mass;
+                VelocityX[i] = (MassX[i] == 0f) ? 0f : MomentumX[i] / MassX[i];
             }
         }
 
+        /*
+         * Calculate staggered Y velocity
+         */
         for (int x = 0; x < Size.x; ++x) {
             for (int y = 0; y < Size.y + 1; ++y) {
                 int i = math.mad(x, Size.y + 1, y);
-                int leftNode = math.mad(x, Size.y + 1, y);
-                int rightNode = math.mad(x + 1, Size.y + 1, y); 
-
-                /*
-                 * Calculate velocity on the Y staggered faces of the Grid
-                 */
-                float mass = NodeMass[leftNode] + NodeMass[rightNode];
-                VelocityY[i] = (mass == 0f)
-                    ? 0f
-                    : (NodeMomentum[leftNode].y + NodeMomentum[rightNode].y) / mass;
+                VelocityY[i] = (MassY[i] == 0f) ? 0f : MomentumY[i] / MassY[i];
             }
         }
     }
@@ -280,14 +310,20 @@ public class StaggeredGrid {
     /// <param name="acceleration">The acceleration generated by the applied force</param>
     /// <param name="dt">The time step of the simulation</param>
     public void ApplyExternalForces(float2 acceleration, float dt) {
-        for (int x = 1; x < Size.x; ++x) {
-            for (int y = 1; y < Size.y - 1; ++y) {
+        /*
+         * Apply force on staggered X velocity
+         */
+        for (int x = 0; x < Size.x + 1; ++x) {
+            for (int y = 0; y < Size.y; ++y) {
                 int i = math.mad(x, Size.y, y);
                 VelocityX[i] += acceleration.x * dt;
             }
         }
-        for (int x = 1; x < Size.x - 1; ++x) {
-            for (int y = 1; y < Size.y; ++y) {
+        /*
+         * Apply force on staggered Y velocity
+         */
+        for (int x = 0; x < Size.x; ++x) {
+            for (int y = 0; y < Size.y + 1; ++y) {
                 int i = math.mad(x, Size.y + 1, y);
                 VelocityY[i] += acceleration.y * dt;
             }
@@ -298,14 +334,20 @@ public class StaggeredGrid {
     /// Enforce Grid boundaries by applying zero velocity at the Grid borders
     /// </summary>
     public void EnforceBoundaries() {
-        for (int y = 1; y < Size.y - 1; ++y) {
-            int left = math.mad(1, Size.y, y);
-            int right = math.mad(Size.x - 1, Size.y, y);
+        /*
+         * Reset X velocity along the vertical borders of the Grid
+         */
+        for (int y = 0; y < Size.y; ++y) {
+            int left = math.mad(0, Size.y, y);
+            int right = math.mad(Size.x, Size.y, y);
             VelocityX[left] = VelocityX[right] = 0f;
         }
-        for (int x = 1; x < Size.x - 1; ++x) {
-            int bottom = math.mad(x, Size.y + 1, 1);
-            int top = math.mad(x, Size.y + 1, Size.y - 1);
+        /*
+         * Reset Y velocity along the horizontal borders of the Grid
+         */
+        for (int x = 0; x < Size.x; ++x) {
+            int bottom = math.mad(x, Size.y + 1, 0);
+            int top = math.mad(x, Size.y + 1, Size.y);
             VelocityY[bottom] = VelocityY[top] = 0f;
         }
     }
