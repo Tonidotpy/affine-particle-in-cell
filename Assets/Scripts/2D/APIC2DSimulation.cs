@@ -382,13 +382,13 @@ public class APIC2DSimulation : MonoBehaviour {
     /// </summary>
     void Start() {
         _grid = new StaggeredGrid(
-            new int2(4, 3),
-            2,
+            new int2(5, 7),
+            1,
             1,
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            3,
+            10,
             0.1f,
             Allocator.Persistent
         );
@@ -455,7 +455,7 @@ public class APIC2DSimulation : MonoBehaviour {
     void FixedUpdate() {
         ParcelsToGrid();
         UpdateGrid(Time.fixedDeltaTime);
-        ProjectPressure(Time.fixedDeltaTime);
+        // ProjectPressure(Time.fixedDeltaTime);
         GridToParcels();
         AdvectParcels();
     }

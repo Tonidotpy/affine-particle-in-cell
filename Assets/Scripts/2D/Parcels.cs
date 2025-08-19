@@ -71,14 +71,15 @@ public class Parcels {
         // TODO: Remove, for test purposes only
         UnityEngine.Random.InitState(0);
         for (int i = 0; i < count; ++i) {
-            Position[i] = new float2(
-                UnityEngine.Random.Range(0.2f, 7.8f),
-                UnityEngine.Random.Range(0.2f, 5.8f)
-            );
-            Velocity[i] = new float2(
-                UnityEngine.Random.Range(-1f, 1f),
-                UnityEngine.Random.Range(-1f, 1f)
-            );
+            // Position[i] = new float2(
+            //     UnityEngine.Random.Range(0.2f, 7.8f),
+            //     UnityEngine.Random.Range(0.2f, 5.8f)
+            // );
+            // Velocity[i] = new float2(
+            //     UnityEngine.Random.Range(-1f, 1f),
+            //     UnityEngine.Random.Range(-1f, 1f)
+            // );
+            Position[i] = new float2(2.5f, 3 + i * 0.2f);
             // Velocity[i] = new float2(1, 0);
             Mass[i] = 1f;
         }
@@ -102,61 +103,69 @@ public class Parcels {
     public void UpdateVelocity(StaggeredGrid grid) {
         for (int i = 0; i < Count; ++i) {
             /*
-             * Calculate indices of the Bottom-Left Cell of the 2x2 box
-             * enclosing the Parcel staggered along the X axis
-             * and its fractional position for the interpolation
+             * Calculate Parcel position and Bottom-Left Node of the Staggered
+             * Grid for the X axis
+             * Offset by one is added due to the ghost layer
              */
-            float2 parcelX = Position[i] / grid.CellSize + new float2(1f, 0.5f);
-            int2 indexX = (int2)math.floor(parcelX);
-            float2 tX = parcelX - indexX;
+            float2 parcelPositionX = Position[i] / grid.CellSize + new float2(1f, 0.5f);
+            int2 bottomLeftNodeX = (int2)math.floor(parcelPositionX);
+            float2 fractionalPositionX = parcelPositionX - bottomLeftNodeX;
+            float2 velocity = float2.zero;
 
             /*
-             * Get X velocities of the box of Cells surrounding the Parcel
+             * Calculate velocity on the X axis of the staggered Grid
              */
-            float2x2 ux = new float2x2();
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int j = math.mad(indexX.x + x, grid.Size.y, indexX.y + y);
-                    ux[x][y] = grid.VelocityX[j];
+                    /* Calculate staggered Node index */
+                    int2 nodeIndexX = bottomLeftNodeX + new int2(x, y);
+                    int index = math.mad(nodeIndexX.x, grid.Size.y, nodeIndexX.y);
+
+                    /*
+                     * Calculate weight based on Parcel position inside the
+                     * staggered Cell
+                     */
+                    float weight = 1;
+                    weight *= (x == 0) ? (1f - fractionalPositionX.x) : fractionalPositionX.x;
+                    weight *= (y == 0) ? (1f - fractionalPositionX.y) : fractionalPositionX.y;
+
+                    /* Calculate X component of the Parcel velocity */
+                    velocity.x += weight * grid.VelocityX[index];
                 }
             }
 
             /*
-             * Calculate indices of the Bottom-Left Cell of the 2x2 box
-             * enclosing the Parcel staggered along the Y axis
-             * and its fractional position for the interpolation
+             * Calculate Parcel position and Bottom-Left Node of the Staggered
+             * Grid for the Y axis
+             * Offset by one is added due to the ghost layer
              */
-            float2 parcelY = Position[i] / grid.CellSize + new float2(0.5f, 1f);
-            int2 indexY = (int2)math.floor(parcelY);
-            float2 tY = parcelY - indexY;
+            float2 parcelPositionY = Position[i] / grid.CellSize + new float2(0.5f, 1f);
+            int2 bottomLeftNodeY = (int2)math.floor(parcelPositionY);
+            float2 fractionalPositionY = parcelPositionY - bottomLeftNodeY;
 
             /*
-             * Get Y velocities of the box of Cells surrounding the Parcel
+             * Calculate velocity on the Y axis of the staggered Grid
              */
-            float2x2 uy = new float2x2();
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int j = math.mad(indexY.x + x, grid.Size.y + 1, indexY.y + y);
-                    uy[x][y] = grid.VelocityY[j];
+                    /* Calculate staggered Node index */
+                    int2 nodeIndexY = bottomLeftNodeY + new int2(x, y);
+                    int index = math.mad(nodeIndexY.x, grid.Size.y + 1, nodeIndexY.y);
+
+                    /*
+                     * Calculate weight based on Parcel position inside the
+                     * staggered Cell
+                     */
+                    float weight = 1;
+                    weight *= (x == 0) ? (1f - fractionalPositionX.x) : fractionalPositionX.x;
+                    weight *= (y == 0) ? (1f - fractionalPositionX.y) : fractionalPositionX.y;
+
+                    /* Calculate Y component of the Parcel velocity */
+                    velocity.y += weight * grid.VelocityY[index];
                 }
             }
 
-            /*
-             * Update velocity using bilinear interpolation based on Parcel
-             * fractional's position
-             */
-            Velocity[i] = new float2(
-                math.lerp(
-                    math.lerp(ux[1][1], ux[0][1], tX.x),
-                    math.lerp(ux[1][0], ux[0][0], tX.x),
-                    tX.y
-                ),
-                math.lerp(
-                    math.lerp(uy[1][1], uy[0][1], tY.x),
-                    math.lerp(uy[1][0], uy[0][0], tY.x),
-                    tY.y
-                )
-            );
+            Velocity[i] = velocity;
         }
     }
 
@@ -168,169 +177,76 @@ public class Parcels {
         // TODO: Fix affine update
         for (int i = 0; i < Count; ++i) {
             /*
-             * Calculate indices of the Bottom-Left Cell of the 2x2 box
-             * enclosing the Parcel staggered along both the X and Y axis
-             * and its fractional position for the interpolation
+             * Calculate Parcel position and Bottom-Left Node of the Staggered
+             * Grid for the X axis
+             * Offset by one is added due to the ghost layer
              */
-            float2 staggeredParcel = Position[i] / grid.CellSize + 0.5f;
-            int2 staggeredIndex = (int2)math.floor(staggeredParcel);
-            float2 staggeredFractionalPosition = staggeredParcel - staggeredIndex;
+            float2 parcelPositionX = Position[i] / grid.CellSize + new float2(1f, 0.5f);
+            int2 bottomLeftNodeX = (int2)math.floor(parcelPositionX);
+            float2 fractionalPositionX = parcelPositionX - bottomLeftNodeX;
 
-            /******************************************************************
-             *              CHANGE IN X VELOCITY ALONG X DIRECTION
-             *****************************************************************/
             /*
-             * Calculate X velocity gradient for the four Cells surrounding
-             * the Parcel
+             * Calculate affine vector on the X axis of the staggered Grid
              */
-            float2x2 dx = new float2x2();
+            float2 cx = new float2();
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int left = math.mad(staggeredIndex.x + x, grid.Size.y, staggeredIndex.y + y);
-                    int right = math.mad(staggeredIndex.x + x + 1, grid.Size.y, staggeredIndex.y + y);
-                    dx[x][y] = (grid.VelocityX[right] - grid.VelocityX[left]) / grid.CellSize;
+                    /* Calculate staggered Node index */
+                    int2 nodeIndexX = bottomLeftNodeX + new int2(x, y);
+                    int index = math.mad(nodeIndexX.x, grid.Size.y, nodeIndexX.y);
+
+                    /*
+                     * Calculate partial derivative of weight based on Parcel
+                     * position inside the staggered Cell
+                     */
+                    float2 dw = new float2(
+                        (y == 0) ? (1f - fractionalPositionX.y) : fractionalPositionX.y,
+                        (x == 0) ? (1f - fractionalPositionX.x) : fractionalPositionX.x
+                    );
+                    if (x == 0) dw.x *= -1f;
+                    if (y == 0) dw.y *= -1f;
+                    dw /= grid.CellSize;
+                    
+                    cx += dw * grid.VelocityX[index];
                 }
             }
-            float C00 = math.lerp(
-                math.lerp(dx[0][0], dx[1][0], staggeredFractionalPosition.x),
-                math.lerp(dx[0][1], dx[1][1], staggeredFractionalPosition.x),
-                staggeredFractionalPosition.y
-            );
-
-            /******************************************************************
-             *              CHANGE IN Y VELOCITY ALONG Y DIRECTION
-             *****************************************************************/
 
             /*
-             * Calculate Y velocity gradient for the four Cells surrounding
-             * the Parcel
+             * Calculate Parcel position and Bottom-Left Node of the Staggered
+             * Grid for the Y axis
+             * Offset by one is added due to the ghost layer
              */
-            float2x2 dy = new float2x2();
+            float2 parcelPositionY = Position[i] / grid.CellSize + new float2(0.5f, 1f);
+            int2 bottomLeftNodeY = (int2)math.floor(parcelPositionY);
+            float2 fractionalPositionY = parcelPositionY - bottomLeftNodeY;
+
+            /*
+             * Calculate affine vector on the Y axis of the staggered Grid
+             */
+            float2 cy = new float2();
             for (int x = 0; x < 2; ++x) {
                 for (int y = 0; y < 2; ++y) {
-                    int bottom = math.mad(staggeredIndex.x + x, grid.Size.y + 1, staggeredIndex.y + y);
-                    int top = math.mad(staggeredIndex.x + x, grid.Size.y + 1, staggeredIndex.y + y + 1);
-                    dy[x][y] = (grid.VelocityY[top] - grid.VelocityY[bottom]) / grid.CellSize;
+                    /* Calculate staggered Node index */
+                    int2 nodeIndexY = bottomLeftNodeY + new int2(x, y);
+                    int index = math.mad(nodeIndexY.x, grid.Size.y + 1, nodeIndexY.y);
+
+                    /*
+                     * Calculate partial derivative of weight based on Parcel
+                     * position inside the staggered Cell
+                     */
+                    float2 dw = new float2(
+                        (y == 0) ? (1f - fractionalPositionY.y) : fractionalPositionY.y,
+                        (x == 0) ? (1f - fractionalPositionY.x) : fractionalPositionY.x
+                    );
+                    if (x == 0) dw.x *= -1f;
+                    if (y == 0) dw.y *= -1f;
+                    dw /= grid.CellSize;
+                    
+                    cy += dw * grid.VelocityY[index];
                 }
             }
-            float C11 = math.lerp(
-                math.lerp(dy[0][0], dy[1][0], staggeredFractionalPosition.x),
-                math.lerp(dy[0][1], dy[1][1], staggeredFractionalPosition.x),
-                staggeredFractionalPosition.y
-            );
 
-            /******************************************************************
-             *              CHANGE IN X VELOCITY ALONG Y DIRECTION
-             *****************************************************************/
-
-            /*
-             * Calculate indices of the Bottom-Left Cell of the 2x2 box
-             * enclosing a "virtual" Parcel placed slightly above the staggered
-             * Parcel and its fractional position for the interpolation
-             */
-            float2 parcelTop = staggeredParcel + new float2(0, 0.5f);
-            int2 indexTop = (int2)math.floor(parcelTop);
-            float2 tTop = parcelTop - indexTop;
-
-            /*
-             * Calculate X velocity of the "virtual" Parcel
-             */
-            float2x2 uxTopStaggered = new float2x2();
-            for (int x = 0; x < 2; ++x) {
-                for (int y = 0; y < 2; ++y) {
-                    int j = math.mad(indexTop.x + x, grid.Size.y, indexTop.y + y);
-                    uxTopStaggered[x][y] = grid.VelocityX[j];
-                }
-            }
-            float uxTop = math.lerp( 
-                math.lerp(uxTopStaggered[0][0], uxTopStaggered[1][0], tTop.x),
-                math.lerp(uxTopStaggered[0][1], uxTopStaggered[1][1], tTop.x),
-                tTop.y
-            );
-
-            /*
-             * Calculate indices of the Bottom-Left Cell of the 2x2 box
-             * enclosing a "virtual" Parcel placed slightly below the staggered
-             * Parcel and its fractional position for the interpolation
-             */
-            float2 parcelBottom = staggeredParcel - new float2(0, 0.5f);
-            int2 indexBottom = (int2)math.floor(parcelBottom);
-            float2 tBottom = parcelBottom - indexBottom;
-
-            /*
-             * Calculate X velocity of the "virtual" Parcel
-             */
-            float2x2 uxBottomStaggered = new float2x2();
-            for (int x = 0; x < 2; ++x) {
-                for (int y = 0; y < 2; ++y) {
-                    int j = math.mad(indexBottom.x + x, grid.Size.y, indexTop.y + y);
-                    uxBottomStaggered[x][y] = grid.VelocityX[j];
-                }
-            }
-            float uxBottom = math.lerp( 
-                math.lerp(uxBottomStaggered[0][0], uxBottomStaggered[1][0], tBottom.x),
-                math.lerp(uxBottomStaggered[0][1], uxBottomStaggered[1][1], tBottom.x),
-                tBottom.y
-            );
-            float C10 = (uxTop - uxBottom) / grid.CellSize;
-
-            /******************************************************************
-             *              CHANGE IN Y VELOCITY ALONG X DIRECTION
-             *****************************************************************/
-
-            /*
-             * Calculate indices of the Bottom-Left Cell of the 2x2 box
-             * enclosing a "virtual" Parcel placed slightly to the right of the
-             * staggered Parcel and its fractional position for the interpolation
-             */
-            float2 parcelRight = staggeredParcel + new float2(0.5f, 0);
-            int2 indexRight = (int2)math.floor(parcelRight);
-            float2 tRight = parcelRight - indexRight;
-
-            /*
-             * Calculate Y velocity of the "virtual" Parcel
-             */
-            float2x2 uyRightStaggered = new float2x2();
-            for (int x = 0; x < 2; ++x) {
-                for (int y = 0; y < 2; ++y) {
-                    int j = math.mad(indexRight.x + x, grid.Size.y + 1, indexRight.y + y);
-                    uyRightStaggered[x][y] = grid.VelocityY[j];
-                }
-            }
-            float uyRight = math.lerp( 
-                math.lerp(uyRightStaggered[0][0], uyRightStaggered[1][0], tRight.x),
-                math.lerp(uyRightStaggered[0][1], uyRightStaggered[1][1], tRight.x),
-                tRight.y
-            );
-
-            /*
-             * Calculate indices of the Bottom-Left Cell of the 2x2 box
-             * enclosing a "virtual" Parcel placed slightly to the left of the
-             * staggered Parcel and its fractional position for the interpolation
-             */
-            float2 parcelLeft = staggeredParcel - new float2(0.5f, 0);
-            int2 indexLeft = (int2)math.floor(parcelLeft);
-            float2 tLeft = parcelLeft - indexLeft;
-
-            /*
-             * Calculate Y velocity of the "virtual" Parcel
-             */
-            float2x2 uyLeftStaggered = new float2x2();
-            for (int x = 0; x < 2; ++x) {
-                for (int y = 0; y < 2; ++y) {
-                    int j = math.mad(indexLeft.x + x, grid.Size.y + 1, indexLeft.y + y);
-                    uyLeftStaggered[x][y] = grid.VelocityY[j];
-                }
-            }
-            float uyLeft = math.lerp( 
-                math.lerp(uyLeftStaggered[0][0], uyLeftStaggered[1][0], tLeft.x),
-                math.lerp(uyLeftStaggered[0][1], uyLeftStaggered[1][1], tLeft.x),
-                tLeft.y
-            );
-            float C01 = (uyRight - uyLeft) / grid.CellSize;
-
-            /* Update affine matrix with calculated values */
-            AffineState[i] = new float2x2(C00, C01, C10, C11);
+            AffineState[i] = new float2x2(cx, cy);
         }
     }
 

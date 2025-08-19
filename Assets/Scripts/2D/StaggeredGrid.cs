@@ -144,14 +144,14 @@ public class StaggeredGrid {
             long byteSize = MomentumY.Length * (long)UnsafeUtility.SizeOf<float2>();
             UnsafeUtility.MemClear(MomentumY.GetUnsafePtr(), byteSize);
         }
-        unsafe {
-            long byteSize = VelocityX.Length * (long)UnsafeUtility.SizeOf<float>();
-            UnsafeUtility.MemClear(VelocityX.GetUnsafePtr(), byteSize);
-        }
-        unsafe {
-            long byteSize = VelocityY.Length * (long)UnsafeUtility.SizeOf<float>();
-            UnsafeUtility.MemClear(VelocityY.GetUnsafePtr(), byteSize);
-        }
+        // unsafe {
+        //     long byteSize = VelocityX.Length * (long)UnsafeUtility.SizeOf<float>();
+        //     UnsafeUtility.MemClear(VelocityX.GetUnsafePtr(), byteSize);
+        // }
+        // unsafe {
+        //     long byteSize = VelocityY.Length * (long)UnsafeUtility.SizeOf<float>();
+        //     UnsafeUtility.MemClear(VelocityY.GetUnsafePtr(), byteSize);
+        // }
     }
 
     /// <summary>
