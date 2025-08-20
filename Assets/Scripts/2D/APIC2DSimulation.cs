@@ -388,7 +388,7 @@ public class APIC2DSimulation : MonoBehaviour {
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            10,
+            2,
             0.1f,
             Allocator.Persistent
         );

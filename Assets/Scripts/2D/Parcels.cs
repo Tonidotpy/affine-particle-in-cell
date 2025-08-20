@@ -79,7 +79,9 @@ public class Parcels {
             //     UnityEngine.Random.Range(-1f, 1f),
             //     UnityEngine.Random.Range(-1f, 1f)
             // );
-            Position[i] = new float2(2.5f, 3 + i * 0.2f);
+            int half = count / 2;
+            float x = (i < half) ? 1f : 3.5f;
+            Position[i] = new float2(x + 0.5f, 3 + (i % half) * 0.2f);
             // Velocity[i] = new float2(1, 0);
             Mass[i] = 1f;
         }
@@ -157,8 +159,8 @@ public class Parcels {
                      * staggered Cell
                      */
                     float weight = 1;
-                    weight *= (x == 0) ? (1f - fractionalPositionX.x) : fractionalPositionX.x;
-                    weight *= (y == 0) ? (1f - fractionalPositionX.y) : fractionalPositionX.y;
+                    weight *= (x == 0) ? (1f - fractionalPositionY.x) : fractionalPositionY.x;
+                    weight *= (y == 0) ? (1f - fractionalPositionY.y) : fractionalPositionY.y;
 
                     /* Calculate Y component of the Parcel velocity */
                     velocity.y += weight * grid.VelocityY[index];
@@ -284,7 +286,6 @@ public class Parcels {
 
             Position[i] = pos;
             Velocity[i] = v;
-            // Debug.Log(i + ": " + Velocity[i].y);
         }
     }
 }
