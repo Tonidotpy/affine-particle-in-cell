@@ -37,6 +37,7 @@ using UnityEngine;
 /// </list>
 /// </para>
 public class StaggeredGrid {
+    public NativeArray<CellType> Type;
     public NativeArray<float> Mass;
     public NativeArray<float> Pressure;
     public NativeArray<float> VelocityX;
@@ -56,7 +57,8 @@ public class StaggeredGrid {
      */
     public NativeArray<float> Divergence;
 
-    public float Density { get; }
+    public float FluidDensity { get; }
+    public float AirDensity { get; }
     public int2 Size { get; }
     public int2 BoundedSize { get { return Size - 2; } }
     public int Area { get { return Size.x * Size.y; } }
@@ -72,9 +74,10 @@ public class StaggeredGrid {
     /// </para>
     /// <param name="size">The size of the grid (width, height)</param>
     /// <param name="cellSize">Size of a single Cell of the Grid</param>
-    /// <param name="density">The fluid consant density</param>
+    /// <param name="fluidDensity">The fluid density</param>
+    /// <param name="airDensity">The air density</param>
     /// <param name="allocator">The used memory allocator</param>
-    public StaggeredGrid(int2 size, float cellSize, float density, Allocator allocator) {
+    public StaggeredGrid(int2 size, float cellSize, float fluidDensity, float airDensity, Allocator allocator) {
         /*
          * To simply calculations and avoid conditional expresions for bound
          * checking a "ghost layer" is added around the Grid
@@ -86,8 +89,10 @@ public class StaggeredGrid {
          * Set costant density value to make pressure able to propagate through
          * the air
          */
-        Density = density;
+        FluidDensity = fluidDensity;
+        AirDensity = airDensity;
 
+        Type = new NativeArray<CellType>(Area, allocator);
         Mass = new NativeArray<float>(Area, allocator);
         Pressure = new NativeArray<float>(Area, allocator);
 
@@ -102,6 +107,18 @@ public class StaggeredGrid {
 
         /* Divergence does not need a ghost layer for the calculation */
         Divergence = new NativeArray<float>(BoundedArea, allocator);
+
+        /* Set all outer cells type to solid */
+        for (int x = 0; x < Size.x; ++x) {
+            int bottom = math.mad(x, Size.y, 0);
+            int top = math.mad(x, Size.y, Size.y - 1);
+            Type[bottom] = Type[top] = CellType.Solid;
+        }
+        for (int y = 0; y < Size.y; ++y) {
+            int left = math.mad(0, Size.y, y);
+            int right = math.mad(Size.x - 1, Size.y, y);
+            Type[left] = Type[right] = CellType.Solid;
+        }    
     }
     
     /// <summary>
@@ -109,6 +126,7 @@ public class StaggeredGrid {
     /// This method MUST be called at the end of the program to avoid memory leaks
     /// </summary>
     public void Dispose() {
+        if (Type.IsCreated) Type.Dispose();
         if (Mass.IsCreated) Mass.Dispose();
         if (Pressure.IsCreated) Pressure.Dispose();
         if (VelocityX.IsCreated) VelocityX.Dispose();
@@ -124,6 +142,12 @@ public class StaggeredGrid {
     /// Resets grid mass and velocity values
     /// </summary>
     public void Reset() { 
+        for (int x = 1; x < Size.x - 1; ++x) {
+            for (int y = 1; y < Size.y - 1; ++y) {
+                int i = math.mad(x, Size.y, y);
+                Type[i] = CellType.Air;
+            }
+        }
         unsafe {
             long byteSize = Mass.Length * (long)UnsafeUtility.SizeOf<float>();
             UnsafeUtility.MemClear(Mass.GetUnsafePtr(), byteSize);
@@ -160,6 +184,11 @@ public class StaggeredGrid {
     /// <param name="parcels">The parcel which mass need to be transfered</param>
     public void TransferMass(Parcels parcels) {
         for (int i = 0; i < parcels.Count; ++i) {
+            /* Update Cell type */
+            int2 cellIndex = (int2)math.floor(parcels.Position[i] / CellSize + 1f);
+            int j = math.mad(cellIndex.x, Size.y, cellIndex.y);
+            Type[j] = CellType.Fluid;
+
             /*
              * Calculate the index of the Bottom-Left Cell inside the 2x2 block
              * that surround the Parcel
@@ -384,6 +413,8 @@ public class StaggeredGrid {
     public void CorrectVelocity(float dt) {
         /*
          * Correct X velocity based on pressure gradient of the adjacent Cells
+         * The first and last columns are skipped since the out of bounds velocity
+         * does not need to be corrected
          */
         for (int x = 1; x < Size.x; ++x) {
             for (int y = 0; y < Size.y; ++y) {
@@ -391,18 +422,17 @@ public class StaggeredGrid {
                  * Calculate indices of the Cells touching the current edge
                  */
                 int i = math.mad(x, Size.y, y);
-                int right = math.mad(x, Size.y, y);
+                int right = i;
                 int left = math.mad(x - 1, Size.y, y);
 
+                float density = FluidDensity;
+                
                 /*
                  * Correct the edge velocity based on pressure gradient and edge
                  * density
                  */
-                float edgeDensity = Density * CellSize;
-                if (edgeDensity != 0) {
-                    float dp = Pressure[right] - Pressure[left];
-                    VelocityX[i] -= dt / edgeDensity * dp;
-                }
+                float dp = Pressure[right] - Pressure[left];
+                VelocityX[i] -= dt / density * dp;
             }
         }
 
@@ -418,15 +448,14 @@ public class StaggeredGrid {
                 int top = math.mad(x, Size.y, y);
                 int bottom = math.mad(x, Size.y, y - 1);
 
+                float density = FluidDensity;
+
                 /*
                  * Correct the edge velocity based on pressure gradient and edge
                  * density
                  */
-                float edgeDensity = Density * CellSize;
-                if (edgeDensity != 0) {
-                    float dp = Pressure[top] - Pressure[bottom];
-                    VelocityY[i] -= dt / edgeDensity * dp;
-                }
+                float dp = Pressure[top] - Pressure[bottom];
+                VelocityY[i] -= dt / density * dp;
             }
         } 
     }

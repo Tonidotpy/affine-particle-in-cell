@@ -38,6 +38,7 @@ public class APIC2DSimulation : MonoBehaviour {
     private GaussSeidelPressureSolver _pressureSolver;
 
     public bool DrawGrid = true;
+    public bool DrawGridCellType = false;
     public bool DrawGridMass = false;
     public bool DrawGridMomentum = false;
     public bool DrawGridVelocity = false;
@@ -93,6 +94,34 @@ public class APIC2DSimulation : MonoBehaviour {
                 _grid.BoundedSize.y
             ) * _grid.CellSize
         );
+    }
+
+    /// <summary>
+    /// Draw Grid C in the Editor for debug
+    /// </summary>
+    private void DrawGridCellTypeGizmos() {
+        Gizmos.matrix = transform.localToWorldMatrix;
+        for (int x = 0; x < _grid.Size.x; ++x) {
+            for (int y = 0; y < _grid.Size.y; ++y) {
+                Vector2 center = new Vector2(x - 0.5f, y - 0.5f);
+                center *= _grid.CellSize;
+
+                int index = math.mad(x, _grid.Size.y, y);
+                const float alpha = 0.3f;
+                switch (_grid.Type[index]) {
+                    case CellType.Fluid:
+                        Gizmos.color = new Color(0.1f, 0.3f, 1f, alpha);
+                        break;
+                    case CellType.Solid:
+                        Gizmos.color = new Color(1f, 0.4f, 0.1f);
+                        break;
+                    default:
+                        Gizmos.color = new Color(0f, 0f, 0f, 0f);
+                        break;
+                }
+                Gizmos.DrawCube(center, Vector2.one * _grid.CellSize);
+            }
+        }
     }
 
     /// <summary>
@@ -264,6 +293,14 @@ public class APIC2DSimulation : MonoBehaviour {
     /// Draw Grid divergence in the Editor for debug
     /// </summary>
     private void DrawGridDivergenceGizmos() {
+        /*
+         * Divergence normalization used for color interpolation
+         */
+        System.Func<float, float> normalize = (float divergence) => {
+            float t = math.abs(divergence);
+            return t / (t + 1f);
+        };
+
         Gizmos.matrix = transform.localToWorldMatrix;
         for (int x = 0; x < _grid.BoundedSize.x; ++x) {
             for (int y = 0; y < _grid.BoundedSize.y; ++y) {
@@ -272,8 +309,7 @@ public class APIC2DSimulation : MonoBehaviour {
 
                 int index = math.mad(x, _grid.BoundedSize.y, y);
                 float divergence = _grid.Divergence[index];
-                float absDivergence = math.abs(divergence);
-                float t = absDivergence / (absDivergence + 1);
+                float t = normalize(divergence);
                 const float alpha = 0.2f;
                 if (divergence < 0) {
                     Gizmos.color = Color.Lerp(
@@ -299,17 +335,23 @@ public class APIC2DSimulation : MonoBehaviour {
     /// Draw Grid pressure in the Editor for debug
     /// </summary>
     private void DrawGridPressureGizmos() {
+        /*
+         * Pressure normalization used for color interpolation
+         */
+        System.Func<float, float> normalize = (float pressure) => {
+            float t = math.abs(pressure);
+            return t / (t + 1f);
+        };
+
         Gizmos.matrix = transform.localToWorldMatrix;
         for (int x = 0; x < _grid.Size.x; ++x) {
             for (int y = 0; y < _grid.Size.y; ++y) {
                 Vector2 center = new Vector2(x - 0.5f, y - 0.5f);
                 center *= _grid.CellSize;
 
-                // Normalize mass for color interpolation
                 int index = math.mad(x, _grid.Size.y, y);
                 float pressure = _grid.Pressure[index];
-                float absPressure = math.abs(pressure);
-                float t = absPressure / (absPressure + 1f);
+                float t = normalize(pressure);
                 const float alpha = 0.2f;
                 if (pressure < 0) {
                     Gizmos.color = Color.Lerp(
@@ -366,6 +408,7 @@ public class APIC2DSimulation : MonoBehaviour {
     void OnDrawGizmos() {
         if (Application.isPlaying) {
             if (DrawGrid) DrawGridGizmos();
+            if (DrawGridCellType) DrawGridCellTypeGizmos();
             if (DrawGridMass) DrawGridMassGizmos();
             if (DrawGridMomentum) DrawGridMomentumGizmos();
             if (DrawGridVelocity) DrawGridVelocityGizmos();
@@ -384,11 +427,12 @@ public class APIC2DSimulation : MonoBehaviour {
         _grid = new StaggeredGrid(
             new int2(5, 7),
             1,
-            1,
+            1000f,
+            1.225f,
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            2,
+            20,
             0.1f,
             Allocator.Persistent
         );
@@ -455,7 +499,7 @@ public class APIC2DSimulation : MonoBehaviour {
     void FixedUpdate() {
         ParcelsToGrid();
         UpdateGrid(Time.fixedDeltaTime);
-        // ProjectPressure(Time.fixedDeltaTime);
+        ProjectPressure(Time.fixedDeltaTime);
         GridToParcels();
         AdvectParcels();
     }
