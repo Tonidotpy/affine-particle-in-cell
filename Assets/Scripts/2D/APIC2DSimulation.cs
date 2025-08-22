@@ -33,10 +33,14 @@ using UnityEditor;
 ///     - Move each Parcel according to its new velocity over the time step.
 /// </para>
 public class APIC2DSimulation : MonoBehaviour {
+    private int _allocationCount = 0;
+    private int _disposeCount = 0;
+
     private StaggeredGrid _grid;
     private Parcels _parcels;
     private GaussSeidelPressureSolver _pressureSolver;
 
+    [Header("Debug Grid")]
     public bool DrawGrid = true;
     public bool DrawGridCellType = false;
     public bool DrawGridMass = false;
@@ -44,6 +48,7 @@ public class APIC2DSimulation : MonoBehaviour {
     public bool DrawGridVelocity = false;
     public bool DrawGridDivergence = false;
     public bool DrawGridPressure = false;
+    [Header("Debug Parcels")]
     public bool DrawParcels = true;
     public bool DrawParcelsVelocity = false;
 
@@ -106,7 +111,7 @@ public class APIC2DSimulation : MonoBehaviour {
                 Vector2 center = new Vector2(x - 0.5f, y - 0.5f);
                 center *= _grid.CellSize;
 
-                int index = math.mad(x, _grid.Size.y, y);
+                int index = math.mad(x + 1, _grid.Size.y + 1, y + 1);
                 const float alpha = 0.3f;
                 switch (_grid.Type[index]) {
                     case CellType.Fluid:
@@ -349,7 +354,7 @@ public class APIC2DSimulation : MonoBehaviour {
                 Vector2 center = new Vector2(x - 0.5f, y - 0.5f);
                 center *= _grid.CellSize;
 
-                int index = math.mad(x, _grid.Size.y, y);
+                int index = math.mad(x + 1, _grid.Size.y + 1, y + 1);
                 float pressure = _grid.Pressure[index];
                 float t = normalize(pressure);
                 const float alpha = 0.2f;
@@ -424,15 +429,17 @@ public class APIC2DSimulation : MonoBehaviour {
     /// Initialize the simulation
     /// </summary>
     void Start() {
+        ++_allocationCount;
+        Debug.Log("Allocating memory: " + _allocationCount);
         _grid = new StaggeredGrid(
             new int2(5, 7),
-            1,
+            2,
             1000f,
             1.225f,
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            20,
+            100,
             0.1f,
             Allocator.Persistent
         );
@@ -443,6 +450,8 @@ public class APIC2DSimulation : MonoBehaviour {
     /// Dispose simulation resources
     /// </summary>
     void OnApplicationQuit() {
+        ++_disposeCount;
+        Debug.Log("Disposing memory: " + _disposeCount);
         _grid.Dispose();
         _parcels.Dispose();
     }
@@ -464,7 +473,7 @@ public class APIC2DSimulation : MonoBehaviour {
     private void UpdateGrid(float dt) {
         float2 g = new float2(0, -9.81f);
         _grid.ApplyExternalForces(g, dt);
-        _grid.EnforceBoundaries();
+        // _grid.EnforceBoundaries();
     }
 
     /// <summary>
@@ -497,10 +506,10 @@ public class APIC2DSimulation : MonoBehaviour {
     /// Main simulation loop
     /// </summary>
     void FixedUpdate() {
+        AdvectParcels();
         ParcelsToGrid();
         UpdateGrid(Time.fixedDeltaTime);
-        ProjectPressure(Time.fixedDeltaTime);
+        // ProjectPressure(Time.fixedDeltaTime);
         GridToParcels();
-        AdvectParcels();
     }
 }

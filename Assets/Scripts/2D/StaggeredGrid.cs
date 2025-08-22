@@ -92,9 +92,11 @@ public class StaggeredGrid {
         FluidDensity = fluidDensity;
         AirDensity = airDensity;
 
-        Type = new NativeArray<CellType>(Area, allocator);
         Mass = new NativeArray<float>(Area, allocator);
-        Pressure = new NativeArray<float>(Area, allocator);
+
+        int extendedArea = (Size.x + 1) * (Size.y + 1);
+        Type = new NativeArray<CellType>(extendedArea, allocator);
+        Pressure = new NativeArray<float>(extendedArea, allocator);
 
         int edgeCountX = (Size.x + 1) * Size.y;
         int edgeCountY = Size.x * (Size.y + 1);
@@ -109,14 +111,14 @@ public class StaggeredGrid {
         Divergence = new NativeArray<float>(BoundedArea, allocator);
 
         /* Set all outer cells type to solid */
-        for (int x = 0; x < Size.x; ++x) {
-            int bottom = math.mad(x, Size.y, 0);
-            int top = math.mad(x, Size.y, Size.y - 1);
+        for (int x = 1; x < Size.x - 1; ++x) {
+            int bottom = math.mad(x + 1, Size.y + 1, 1);
+            int top = math.mad(x + 1, Size.y + 1, Size.y);
             Type[bottom] = Type[top] = CellType.Solid;
         }
-        for (int y = 0; y < Size.y; ++y) {
-            int left = math.mad(0, Size.y, y);
-            int right = math.mad(Size.x - 1, Size.y, y);
+        for (int y = 1; y < Size.y - 1; ++y) {
+            int left = math.mad(1, Size.y + 1, y + 1);
+            int right = math.mad(Size.x, Size.y + 1, y + 1);
             Type[left] = Type[right] = CellType.Solid;
         }    
     }
@@ -144,7 +146,7 @@ public class StaggeredGrid {
     public void Reset() { 
         for (int x = 1; x < Size.x - 1; ++x) {
             for (int y = 1; y < Size.y - 1; ++y) {
-                int i = math.mad(x, Size.y, y);
+                int i = math.mad(x + 1, Size.y + 1, y + 1);
                 Type[i] = CellType.Air;
             }
         }
@@ -186,7 +188,7 @@ public class StaggeredGrid {
         for (int i = 0; i < parcels.Count; ++i) {
             /* Update Cell type */
             int2 cellIndex = (int2)math.floor(parcels.Position[i] / CellSize + 1f);
-            int j = math.mad(cellIndex.x, Size.y, cellIndex.y);
+            int j = math.mad(cellIndex.x + 1, Size.y + 1, cellIndex.y + 1);
             Type[j] = CellType.Fluid;
 
             /*
@@ -369,7 +371,10 @@ public class StaggeredGrid {
         for (int y = 0; y < Size.y; ++y) {
             int left = math.mad(0, Size.y, y);
             int right = math.mad(Size.x, Size.y, y);
+            int boundedLeft = math.mad(1, Size.y, y);
+            int boundedRight = math.mad(Size.x - 1, Size.y, y);
             VelocityX[left] = VelocityX[right] = 0f;
+            VelocityX[boundedLeft] = VelocityX[boundedRight] = 0f;
         }
         /*
          * Reset Y velocity along the horizontal borders of the Grid
@@ -377,7 +382,28 @@ public class StaggeredGrid {
         for (int x = 0; x < Size.x; ++x) {
             int bottom = math.mad(x, Size.y + 1, 0);
             int top = math.mad(x, Size.y + 1, Size.y);
+            int boundedBottom = math.mad(x, Size.y + 1, 1);
+            int boundedTop = math.mad(x, Size.y + 1, Size.y - 1);
             VelocityY[bottom] = VelocityY[top] = 0f;
+            VelocityY[boundedBottom] = VelocityY[boundedTop] = 0f;
+        }
+        
+        /*
+         * Reset X velocity on the top and bottom ghost layers of the Grid
+         */
+        for (int x = 0; x < Size.x + 1; ++x) {
+            int bottom = math.mad(x, Size.y, 0);
+            int top = math.mad(x, Size.y, Size.y - 1);
+            VelocityX[bottom] = VelocityX[top] = 0f;
+        }
+
+        /*
+         * Reset Y velocity on the right and left ghost layers of the Grid
+         */
+        for (int y = 0; y < Size.y + 1; ++y) {
+            int left = math.mad(0, Size.y + 1, y);
+            int right = math.mad(Size.x - 1, Size.y + 1, y);
+            VelocityY[left] = VelocityY[right] = 0f;
         }
     }
 
@@ -422,8 +448,8 @@ public class StaggeredGrid {
                  * Calculate indices of the Cells touching the current edge
                  */
                 int i = math.mad(x, Size.y, y);
-                int right = i;
-                int left = math.mad(x - 1, Size.y, y);
+                int right = math.mad(x + 1, Size.y + 1, y + 1);
+                int left = math.mad(x, Size.y + 1, y + 1);
 
                 float density = FluidDensity;
                 
@@ -431,7 +457,7 @@ public class StaggeredGrid {
                  * Correct the edge velocity based on pressure gradient and edge
                  * density
                  */
-                float dp = Pressure[right] - Pressure[left];
+                float dp = (Pressure[right] - Pressure[left]) / CellSize;
                 VelocityX[i] -= dt / density * dp;
             }
         }
@@ -445,8 +471,8 @@ public class StaggeredGrid {
                  * Calculate indices of the Cells touching the current edge
                  */
                 int i = math.mad(x, Size.y + 1, y);
-                int top = math.mad(x, Size.y, y);
-                int bottom = math.mad(x, Size.y, y - 1);
+                int top = math.mad(x + 1, Size.y + 1, y + 1);
+                int bottom = math.mad(x + 1, Size.y + 1, y);
 
                 float density = FluidDensity;
 
@@ -454,7 +480,7 @@ public class StaggeredGrid {
                  * Correct the edge velocity based on pressure gradient and edge
                  * density
                  */
-                float dp = Pressure[top] - Pressure[bottom];
+                float dp = (Pressure[top] - Pressure[bottom]) / CellSize;
                 VelocityY[i] -= dt / density * dp;
             }
         } 

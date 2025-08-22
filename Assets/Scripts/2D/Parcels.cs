@@ -71,20 +71,23 @@ public class Parcels {
         // TODO: Remove, for test purposes only
         UnityEngine.Random.InitState(0);
         for (int i = 0; i < count; ++i) {
-            // Position[i] = new float2(
-            //     UnityEngine.Random.Range(0.2f, 7.8f),
-            //     UnityEngine.Random.Range(0.2f, 5.8f)
-            // );
-            // Velocity[i] = new float2(
-            //     UnityEngine.Random.Range(-1f, 1f),
-            //     UnityEngine.Random.Range(-1f, 1f)
-            // );
-            int half = count / 2;
-            float x = (i < half) ? 1f : 3.5f;
-            Position[i] = new float2(x + 0.5f, 3 + (i % half) * 0.2f);
+            Position[i] = new float2(
+                UnityEngine.Random.Range(0.2f, 7.8f),
+                UnityEngine.Random.Range(0.2f, 5.8f)
+            );
+            Velocity[i] = new float2(
+                UnityEngine.Random.Range(-1f, 1f),
+                UnityEngine.Random.Range(-1f, 1f)
+            );
+            // int half = count / 2;
+            // float x = (i < half) ? 1f : 3.5f;
+            // Position[i] = new float2(x + 0.5f, 3 + (i % half) * 0.2f);
             // Velocity[i] = new float2(1, 0);
             Mass[i] = 1f;
         }
+        // Position[0] = new float2(3, 3);
+        // Position[1] = new float2(2, 4);
+        // Position[2] = new float2(4, 4);
     }
     
     /// <summary>
@@ -259,25 +262,30 @@ public class Parcels {
     /// <param name="dt">The time step of the simulation</param>
     public void Move(StaggeredGrid grid, float dt) {
         for (int i = 0; i < Count; ++i) {
-            float2 v = Velocity[i];
             /* Calculate midpoint velocity */
-            // float2 vMid = v + math.mul(
-            //     AffineState[i],
-            //     v * dt * 0.5f // Half-Step
-            // );
-            // float2 pos = Position[i] + vMid * dt;
-            // TODO: Switch from Euler integration to Runge-Kutta 2 integration method for better stability
-            float2 pos = Position[i] + v * dt;
+            float2 v = Velocity[i];
+            float2 vMid = v + math.mul(
+                AffineState[i],
+                v
+            ) * (dt * 0.5f); // Half Step;
+            float2 pos = Position[i] + vMid * dt;
             float2 size = (float2)grid.BoundedSize * grid.CellSize;
             
+            // TODO: Check boundary conditions and correct Parcels velocity
             /* Correct the Parcel velocity if outside of the Grid bounds */
-            if (pos.x < 0 || pos.x > size.x) {
-                v.x = 0;
+            if (pos.x < 0f || pos.x > size.x) {
+                // float t = (pos.x < 0f) ? Position[i].x : (Position[i].x - size.x);
+                // t /= math.distance(pos.x, Position[i].x);
+                // v.x = math.lerp(0, v.x, t);
+                // v.x = 0f;
                 v.y *= (1f - Friction);
             }
             if (pos.y < 0 || pos.y > size.y) {
+                // float t = (pos.y < 0f) ? Position[i].y : (Position[i].y - size.y);
+                // t /= math.distance(pos.y, Position[i].y);
                 v.x *= (1f - Friction);
-                v.y = 0;
+                // v.y = 0f;
+                // v.y = math.lerp(0, v.y, t);
             }
 
             /* Correct the Parcel position if outside of the Grid bounds */
