@@ -432,14 +432,14 @@ public class APIC2DSimulation : MonoBehaviour {
         ++_allocationCount;
         Debug.Log("Allocating memory: " + _allocationCount);
         _grid = new StaggeredGrid(
-            new int2(5, 7),
+            new int2(7, 7),
             2,
             1000f,
             1.225f,
             Allocator.Persistent
         );
         _parcels = new Parcels(
-            100,
+            3,
             0.1f,
             Allocator.Persistent
         );
@@ -509,7 +509,7 @@ public class APIC2DSimulation : MonoBehaviour {
         AdvectParcels();
         ParcelsToGrid();
         UpdateGrid(Time.fixedDeltaTime);
-        // ProjectPressure(Time.fixedDeltaTime);
+        ProjectPressure(Time.fixedDeltaTime);
         GridToParcels();
     }
 }

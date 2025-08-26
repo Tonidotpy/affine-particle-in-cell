@@ -444,6 +444,11 @@ public class StaggeredGrid {
          */
         for (int x = 1; x < Size.x; ++x) {
             for (int y = 0; y < Size.y; ++y) {
+                int r = math.mad(x + 1, Size.y + 1, y + 1);
+                int l = math.mad(x, Size.y + 1, y + 1);
+                if (Type[r] != CellType.Fluid && Type[l] != CellType.Fluid)
+                    continue;
+
                 /*
                  * Calculate indices of the Cells touching the current edge
                  */
@@ -467,6 +472,11 @@ public class StaggeredGrid {
          */
         for (int x = 0; x < Size.x; ++x) {
             for (int y = 1; y < Size.y; ++y) {
+                int t = math.mad(x + 1, Size.y + 1, y + 1);
+                int b = math.mad(x + 1, Size.y + 1, y);
+                if (Type[t] != CellType.Fluid && Type[b] != CellType.Fluid)
+                    continue;
+
                 /*
                  * Calculate indices of the Cells touching the current edge
                  */

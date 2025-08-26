@@ -58,15 +58,12 @@ public class GaussSeidelPressureSolver {
                             fluidIndex = math.mad(x, grid.Size.y + 1, y + 1);
                         }
 
-
                         float b = ((grid.FluidDensity * grid.CellSize) / dt) * boundaryVelocity;
                         grid.Pressure[index] = grid.Pressure[fluidIndex] + b;
                     }
                     else { 
                         // Calculate known value
-                        int boundedIndex = math.mad(x, grid.BoundedSize.y, y);
-                        if (boundedIndex > 35)
-                            Debug.Log(x + "," + y);
+                        int boundedIndex = math.mad(x - 1, grid.BoundedSize.y, y - 1);
                         float b = ((grid.CellArea * grid.FluidDensity) / dt) * grid.Divergence[boundedIndex];
 
                         // Calculate pressure value

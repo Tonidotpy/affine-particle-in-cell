@@ -71,23 +71,27 @@ public class Parcels {
         // TODO: Remove, for test purposes only
         UnityEngine.Random.InitState(0);
         for (int i = 0; i < count; ++i) {
-            Position[i] = new float2(
-                UnityEngine.Random.Range(0.2f, 7.8f),
-                UnityEngine.Random.Range(0.2f, 5.8f)
-            );
-            Velocity[i] = new float2(
-                UnityEngine.Random.Range(-1f, 1f),
-                UnityEngine.Random.Range(-1f, 1f)
-            );
+            // Position[i] = new float2(
+            //     UnityEngine.Random.Range(0.2f, 7.8f),
+            //     UnityEngine.Random.Range(0.2f, 5.8f)
+            // );
+            // Velocity[i] = new float2(
+            //     UnityEngine.Random.Range(-1f, 1f),
+            //     UnityEngine.Random.Range(-1f, 1f)
+            // );
             // int half = count / 2;
             // float x = (i < half) ? 1f : 3.5f;
             // Position[i] = new float2(x + 0.5f, 3 + (i % half) * 0.2f);
             // Velocity[i] = new float2(1, 0);
             Mass[i] = 1f;
         }
-        // Position[0] = new float2(3, 3);
-        // Position[1] = new float2(2, 4);
-        // Position[2] = new float2(4, 4);
+        Position[0] = new float2(3, 3);
+        Position[1] = new float2(7, 7);
+        Position[2] = new float2(11, 11);
+
+        Velocity[0] = new float2(1, 0);
+        Velocity[1] = new float2(0, 1);
+        Velocity[2] = new float2(1, 0);
     }
     
     /// <summary>
@@ -289,7 +293,7 @@ public class Parcels {
             }
 
             /* Correct the Parcel position if outside of the Grid bounds */
-            float epsilon = 0f; // grid.CellSize * 0.01f;
+            float epsilon = grid.CellSize * 0.01f;
             pos = math.clamp(pos, epsilon, size - epsilon);
 
             Position[i] = pos;
