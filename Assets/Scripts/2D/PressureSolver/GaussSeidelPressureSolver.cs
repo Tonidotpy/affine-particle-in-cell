@@ -31,10 +31,7 @@ public class GaussSeidelPressureSolver {
                 for (int y = 0; y < grid.Size.y; ++y) {
                     int index = math.mad(x + 1, grid.Size.y + 1, y + 1);
 
-                    if (grid.Type[index] == CellType.Air) {
-                        grid.Pressure[index] = 0f;
-                    }
-                    else if (grid.Type[index] == CellType.Solid) {
+                    if (grid.Type[index] == CellType.Solid) {
                         float boundaryVelocity = 0f;
                         int fluidIndex = 0;
                         if (y == 0) {
@@ -49,19 +46,19 @@ public class GaussSeidelPressureSolver {
                         }
                         else if (x == 0) {
                             int j = math.mad(x + 1, grid.Size.y, y);
-                            boundaryVelocity = grid.VelocityY[j];
+                            boundaryVelocity = grid.VelocityX[j];
                             fluidIndex = math.mad(x + 2, grid.Size.y + 1, y + 1);
                         }
                         else if (x == grid.Size.x - 1) {
                             int j = math.mad(x - 1, grid.Size.y, y);
-                            boundaryVelocity = grid.VelocityY[j];
+                            boundaryVelocity = grid.VelocityX[j];
                             fluidIndex = math.mad(x, grid.Size.y + 1, y + 1);
                         }
 
                         float b = ((grid.FluidDensity * grid.CellSize) / dt) * boundaryVelocity;
                         grid.Pressure[index] = grid.Pressure[fluidIndex] + b;
                     }
-                    else { 
+                    else if (grid.Type[index] == CellType.Fluid) { 
                         // Calculate known value
                         int boundedIndex = math.mad(x - 1, grid.BoundedSize.y, y - 1);
                         float b = ((grid.CellArea * grid.FluidDensity) / dt) * grid.Divergence[boundedIndex];
@@ -73,6 +70,9 @@ public class GaussSeidelPressureSolver {
                         int top = index + 1;
                         grid.Pressure[index] = (grid.Pressure[left] + grid.Pressure[right] +
                             grid.Pressure[bottom] + grid.Pressure[top] - b) * 0.25f;
+                    }
+                    else {
+                        grid.Pressure[index] = 0f;
                     }
                 }
             }

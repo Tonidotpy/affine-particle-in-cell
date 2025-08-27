@@ -315,17 +315,17 @@ public class APIC2DSimulation : MonoBehaviour {
                 int index = math.mad(x, _grid.BoundedSize.y, y);
                 float divergence = _grid.Divergence[index];
                 float t = normalize(divergence);
-                const float alpha = 0.2f;
+                const float alpha = 0.4f;
                 if (divergence < 0) {
                     Gizmos.color = Color.Lerp(
-                        new Color(0, 0, 1f, alpha),
+                        new Color(0, 0, 1f, 0),
                         new Color(0, 1f, 0, alpha),
                         t
                     );
                 }
                 else {
                     Gizmos.color = Color.Lerp(
-                        new Color(0, 0, 1f, alpha),
+                        new Color(0, 0, 1f, 0),
                         new Color(1f, 0, 0, alpha),
                         t
                     );
@@ -357,17 +357,17 @@ public class APIC2DSimulation : MonoBehaviour {
                 int index = math.mad(x + 1, _grid.Size.y + 1, y + 1);
                 float pressure = _grid.Pressure[index];
                 float t = normalize(pressure);
-                const float alpha = 0.2f;
+                const float alpha = 0.4f;
                 if (pressure < 0) {
                     Gizmos.color = Color.Lerp(
-                        new Color(0, 0, 1f, alpha),
+                        new Color(0, 0, 1f, 0),
                         new Color(0, 1f, 0, alpha),
                         t
                     );
                 }
                 else {
                     Gizmos.color = Color.Lerp(
-                        new Color(0, 0, 1f, alpha),
+                        new Color(0, 0, 1f, 0),
                         new Color(1f, 0, 0, alpha),
                         t
                     );
@@ -472,7 +472,7 @@ public class APIC2DSimulation : MonoBehaviour {
     /// <param name="dt">The time step of the simulation</param>
     private void UpdateGrid(float dt) {
         float2 g = new float2(0, -9.81f);
-        _grid.ApplyExternalForces(g, dt);
+        // _grid.ApplyExternalForces(g, dt);
         // _grid.EnforceBoundaries();
     }
 
