@@ -472,7 +472,7 @@ public class APIC2DSimulation : MonoBehaviour {
     /// <param name="dt">The time step of the simulation</param>
     private void UpdateGrid(float dt) {
         float2 g = new float2(0, -9.81f);
-        // _grid.ApplyExternalForces(g, dt);
+        _grid.ApplyExternalForces(g, dt);
         // _grid.EnforceBoundaries();
     }
 

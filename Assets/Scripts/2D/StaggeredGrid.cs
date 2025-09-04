@@ -413,21 +413,27 @@ public class StaggeredGrid {
     public void CalculateDivergence() {
         for (int x = 0; x < BoundedSize.x; ++x) {
             for (int y = 0; y < BoundedSize.y; ++y) {
-                /*
-                 * Calculate indices of the four edges of the current Cell
-                 */
                 int i = math.mad(x, BoundedSize.y, y);
-                int left = math.mad(x + 1, Size.y, y + 1);
-                int right = math.mad(x + 2, Size.y, y + 1);
-                int bottom = math.mad(x + 1, Size.y + 1, y + 1);
-                int top = math.mad(x + 1, Size.y + 1, y + 2);
+                int index = math.mad(x + 2, Size.y + 1, y + 2);
 
-                /*
-                 * Calculate Cell divergence based on staggered velocities
-                 */
-                Divergence[i] = (VelocityX[right] - VelocityX[left]) +
-                    (VelocityY[top] - VelocityY[bottom]);
-                Divergence[i] /= CellSize;
+                if (Type[index] == CellType.Fluid) {
+                    /*
+                     * Calculate indices of the four edges of the current Cell
+                     */
+                    int left = math.mad(x + 1, Size.y, y + 1);
+                    int right = math.mad(x + 2, Size.y, y + 1);
+                    int bottom = math.mad(x + 1, Size.y + 1, y + 1);
+                    int top = math.mad(x + 1, Size.y + 1, y + 2);
+
+                    /*
+                     * Calculate Cell divergence based on staggered velocities
+                     */
+                    Divergence[i] = (VelocityX[right] - VelocityX[left]) +
+                        (VelocityY[top] - VelocityY[bottom]);
+                    Divergence[i] /= CellSize;
+                }
+                else
+                    Divergence[i] = 0;
             }
         }
     }

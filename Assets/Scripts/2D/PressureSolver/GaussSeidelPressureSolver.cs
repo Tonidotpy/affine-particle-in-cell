@@ -55,8 +55,12 @@ public class GaussSeidelPressureSolver {
                             fluidIndex = math.mad(x, grid.Size.y + 1, y + 1);
                         }
 
-                        float b = ((grid.FluidDensity * grid.CellSize) / dt) * boundaryVelocity;
-                        grid.Pressure[index] = grid.Pressure[fluidIndex] + b;
+                        if (grid.Type[fluidIndex] == CellType.Fluid) {
+                            float b = ((grid.FluidDensity * grid.CellSize) / dt) * boundaryVelocity;
+                            grid.Pressure[index] = grid.Pressure[fluidIndex] + b;
+                        }
+                        else
+                            grid.Pressure[index] = 0;
                     }
                     else if (grid.Type[index] == CellType.Fluid) { 
                         // Calculate known value
