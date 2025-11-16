@@ -36,7 +36,9 @@ namespace FluidSimulation {
         readonly PressureSolverData[,] pressureData;
 
         const float density = 1f;
-        const float timeStep = 1f / 60f;
+        float timeStep => 1f / 60f * timeStepMultiplier;
+        public float timeStepMultiplier = 1;
+		public float SOR = 1;
 
         public FluidGrid(int width, int height, int cellSize) {
             this.width = width;
@@ -183,7 +185,8 @@ namespace FluidSimulation {
                         newPressure = (pressureSum - density * cellSize * info.velocityTerm) / (float)info.flowEdgeCount;
                     }
 
-                    pressure[x, y] = newPressure;
+                    float oldPressure = pressure[x, y];
+                    pressure[x, y] = oldPressure + (newPressure - oldPressure) * SOR;
                 }
             }
         }

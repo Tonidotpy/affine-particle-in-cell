@@ -11,6 +11,8 @@ namespace FluidSimulation {
 
         [Header("Simulation Settings")]
         public int solverIterations = 1;
+        public float sor = 1.7f;
+        public float timeStepMultiplier = 1f;
 
         FluidDrawer fluidDrawer;
         FluidGrid fluidGrid;
@@ -29,6 +31,9 @@ namespace FluidSimulation {
         }
 
         void Simulate() {
+            fluidGrid.timeStepMultiplier = timeStepMultiplier;
+            fluidGrid.SOR = sor;
+
             // Solve for pressure
             fluidGrid.SolvePressure(solverIterations);
             fluidGrid.UpdateVelocities();
