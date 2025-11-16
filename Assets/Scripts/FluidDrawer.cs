@@ -49,9 +49,6 @@ namespace FluidSimulation {
 
         FluidGrid fluidGrid;
 		Vector2 cellDisplaySize;
-        Vector2 boundsSize;
-        Vector2 bottomLeft;
-        float halfCellSize;
 
         bool isInteracting;
         Vector2 mousePositionOld;
@@ -59,19 +56,6 @@ namespace FluidSimulation {
         public void SetFluidGridToVisualize(FluidGrid grid) {
             fluidGrid = grid;
             cellDisplaySize = Vector2.one * grid.cellSize * (1 - cellBorderThickness);
-            boundsSize = new Vector2(grid.width, grid.height) * grid.cellSize;
-            bottomLeft = -boundsSize * 0.5f;
-            halfCellSize = grid.cellSize * 0.5f;
-        }
-
-        Vector2 CellCenter(int x, int y) => bottomLeft + new Vector2(x + 0.5f, y + 0.5f) * fluidGrid.cellSize;
-        Vector2 LeftEdgeCenter(int x, int y) => CellCenter(x, y) - new Vector2(halfCellSize, 0);
-        Vector2 BottomEdgeCenter(int x, int y) => CellCenter(x, y) - new Vector2(0, halfCellSize);
-
-        Vector2Int CellCoordsFromPosition(Vector2 pos) {
-            float x = (pos.x - bottomLeft.x) / fluidGrid.cellSize - 0.5f;
-            float y = (pos.y - bottomLeft.y) / fluidGrid.cellSize - 0.5f;
-            return new Vector2Int(RoundToInt(x), RoundToInt(y));
         }
 
         public void Visualize() {
@@ -92,7 +76,7 @@ namespace FluidSimulation {
                     for (int py = 0; py < interpolatedHeight; ++py) {
                         float tx = px / (interpolatedWidth - 1f);
                         float ty = py / (interpolatedHeight - 1f);
-                        Vector2 position = bottomLeft + new Vector2(tx * boundsSize.x, ty * boundsSize.y);
+                        Vector2 position = fluidGrid.bottomLeft + new Vector2(tx * fluidGrid.boundsSize.x, ty * fluidGrid.boundsSize.y);
                         Vector2 velocity = fluidGrid.SampleVelocity(position);
                         DrawVelocityArrow(
                             position,
@@ -109,7 +93,7 @@ namespace FluidSimulation {
             for (int x = 0; x < fluidGrid.velocitiesX.GetLength(0); ++x) {
                 for (int y = 0; y < fluidGrid.velocitiesX.GetLength(1); ++y) {
                     DrawVelocityArrow(
-                        LeftEdgeCenter(x, y),
+                        fluidGrid.LeftEdgeCenter(x, y),
                         Vector2.right * fluidGrid.velocitiesX[x, y],
                         velocityXColor,
                         velocityPointRadius,
@@ -122,7 +106,7 @@ namespace FluidSimulation {
             for (int x = 0; x < fluidGrid.velocitiesY.GetLength(0); ++x) {
                 for (int y = 0; y < fluidGrid.velocitiesY.GetLength(1); ++y) {
                     DrawVelocityArrow(
-                        BottomEdgeCenter(x, y),
+                        fluidGrid.BottomEdgeCenter(x, y),
                         Vector2.up * fluidGrid.velocitiesY[x, y],
                         velocityYColor,
                         velocityPointRadius,
@@ -149,19 +133,19 @@ namespace FluidSimulation {
                     float divergence = fluidGrid.CalculateDivergenceAtCell(x, y);
                     float divergenceT = Abs(divergence) / divergenceDisplayRange;
                     col = Color.Lerp(col, divergence < 0 ? negativeDivergenceColor : positiveDivergenceColor, divergenceT);
-                    Draw.Text(FontType.JetbrainsMonoRegular, $"{divergence:0.00}", fontSize, CellCenter(x, y), Anchor.Centre, Color.white);
+                    Draw.Text(FontType.JetbrainsMonoRegular, $"{divergence:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
                     break;
                 case VisualizationMode.Pressure:
                     float pressure = fluidGrid.pressure[x, y];
                     float pressureT = Abs(pressure) / pressureDisplayRange;
                     col = Color.Lerp(col, pressure < 0 ? negativePressureColor : positivePressureColor, pressureT);
-                    Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, CellCenter(x, y), Anchor.Centre, Color.white);
+                    Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
                     break;
                 default:
                     break;
             }
 
-            Draw.Quad(CellCenter(x, y), cellDisplaySize, col);
+            Draw.Quad(fluidGrid.CellCenter(x, y), cellDisplaySize, col);
         }
 
         void DrawVelocityArrow(
@@ -193,7 +177,7 @@ namespace FluidSimulation {
             }
 
             if (isInteracting) {
-                Vector2Int centerCoord = CellCoordsFromPosition(mousePosition);
+                Vector2Int centerCoord = fluidGrid.CellCoordsFromPosition(mousePosition);
 
                 Vector2 mouseDelta = mousePosition - mousePositionOld;
                 int numCellsHalf = CeilToInt(interactionRadius / fluidGrid.cellSize * 0.5f);
@@ -204,7 +188,7 @@ namespace FluidSimulation {
                         if (x < 0 || x >= fluidGrid.width || y < 0 || y >= fluidGrid.height)
                             continue;
 
-                        Vector2 cellPosition = CellCenter(x, y);
+                        Vector2 cellPosition = fluidGrid.CellCenter(x, y);
                         float weight = 1 - Maths.Clamp01((cellPosition - mousePosition).sqrMagnitude / (interactionRadius * interactionRadius));
                         fluidGrid.velocitiesX[x, y] += mouseDelta.x * weight * interactionStrength;
                         fluidGrid.velocitiesY[x, y] += mouseDelta.y * weight * interactionStrength;

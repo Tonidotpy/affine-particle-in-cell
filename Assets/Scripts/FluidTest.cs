@@ -35,10 +35,17 @@ namespace FluidSimulation {
             
             // Update visualization
             fluidDrawer.Visualize();
+
+            // Advection
+            fluidGrid.AdvectVelocity();
         }
 
         void HandleInput() {
             fluidDrawer.HandleInteraction();
+
+            if (Input.GetKeyDown(KeyCode.C)) {
+                fluidGrid.ClearVelocities();
+            }
         }
     }
 }

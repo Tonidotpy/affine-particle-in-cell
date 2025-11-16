@@ -22,9 +22,16 @@ namespace FluidSimulation {
         public readonly int height;
         public readonly int cellSize;
 
+        public readonly Vector2 boundsSize;
+        public readonly Vector2 bottomLeft;
+        public readonly float halfCellSize;
+
         public readonly CellType[,] cellTypes;
         public readonly float[,] velocitiesX;
         public readonly float[,] velocitiesY;
+        public readonly float[,] velocitiesXNext;
+        public readonly float[,] velocitiesYNext;
+
         public readonly float[,] pressure;
         readonly PressureSolverData[,] pressureData;
 
@@ -39,6 +46,8 @@ namespace FluidSimulation {
             cellTypes = new CellType[width, height];
             velocitiesX = new float[width + 1, height];
             velocitiesY = new float[width, height + 1];
+            velocitiesYNext = new float[width, height + 1];
+            velocitiesXNext = new float[width + 1, height];
             pressureData = new PressureSolverData[width, height];
             pressure = new float[width, height];
 
@@ -51,6 +60,21 @@ namespace FluidSimulation {
                 cellTypes[0, y] = CellType.Solid;
                 cellTypes[width - 1, y] = CellType.Solid;
             }
+
+            // Pre calculate useful values
+            boundsSize = new Vector2(width, height) * cellSize ;
+            bottomLeft = -boundsSize * 0.5f;
+            halfCellSize = cellSize * 0.5f;
+        }
+
+        public Vector2 CellCenter(int x, int y) => bottomLeft + new Vector2(x + 0.5f, y + 0.5f) * cellSize;
+        public Vector2 LeftEdgeCenter(int x, int y) => CellCenter(x, y) - new Vector2(halfCellSize, 0);
+        public Vector2 BottomEdgeCenter(int x, int y) => CellCenter(x, y) - new Vector2(0, halfCellSize);
+
+        public Vector2Int CellCoordsFromPosition(Vector2 pos) {
+            float x = (pos.x - bottomLeft.x) / cellSize - 0.5f;
+            float y = (pos.y - bottomLeft.y) / cellSize - 0.5f;
+            return new Vector2Int(RoundToInt(x), RoundToInt(y));
         }
 
         public bool IsSolid(int x, int y) {
@@ -192,6 +216,69 @@ namespace FluidSimulation {
                     float pressureTop = GetPressure(x, y);
                     float pressureBottom = GetPressure(x, y - 1);
                     velocitiesY[x, y] -= k * (pressureTop - pressureBottom);
+                }
+            }
+        }
+
+        public void AdvectVelocity() {
+            for (int x = 0; x < velocitiesX.GetLength(0); ++x) {
+                for (int y = 0; y < velocitiesX.GetLength(1); ++y) {
+                    if (IsSolid(x - 1, y) || IsSolid(x, y)) {
+                        velocitiesXNext[x, y] = velocitiesX[x, y];
+                        continue;
+                    }
+
+                    Vector2 position = LeftEdgeCenter(x, y);
+                    Vector2 velocity = SampleVelocity(position);
+                    Vector2 positionPrev = position - velocity * timeStep;
+                    velocitiesXNext[x, y] = SampleVelocity(positionPrev).x;
+                }
+            }
+
+            for (int x = 0; x < velocitiesY.GetLength(0); ++x) {
+                for (int y = 0; y < velocitiesY.GetLength(1); ++y) {
+                    if (IsSolid(x - 1, y) || IsSolid(x, y)) {
+                        velocitiesYNext[x, y] = velocitiesY[x, y];
+                        continue;
+                    }
+
+                    Vector2 position = BottomEdgeCenter(x, y);
+                    Vector2 velocity = SampleVelocity(position);
+                    Vector2 positionPrev = position - velocity * timeStep;
+                    velocitiesYNext[x, y] = SampleVelocity(positionPrev).y;
+                }
+            }
+
+            // Update velocities
+            for (int x = 0; x < velocitiesX.GetLength(0); ++x) {
+                for (int y = 0; y < velocitiesX.GetLength(1); ++y) {
+                    velocitiesX[x, y] = velocitiesXNext[x, y];
+                }
+            }
+
+            for (int x = 0; x < velocitiesY.GetLength(0); ++x) {
+                for (int y = 0; y < velocitiesY.GetLength(1); ++y) {
+                    velocitiesY[x, y] = velocitiesYNext[x, y];
+                }
+            }
+        }
+
+        public void ClearVelocities() {
+            for (int x = 0; x < velocitiesX.GetLength(0); ++x) {
+                for (int y = 0; y < velocitiesX.GetLength(1); ++y) {
+                    velocitiesX[x, y] = 0;
+                }
+            }
+
+            for (int x = 0; x < velocitiesY.GetLength(0); ++x) {
+                for (int y = 0; y < velocitiesY.GetLength(1); ++y) {
+                    velocitiesY[x, y] = 0;
+                }
+            }
+
+            for (int x = 0; x < width; ++x) {
+                for (int y = 0; y < height; ++y) {
+                    pressure[x, y] = 0;
                 }
             }
         }
