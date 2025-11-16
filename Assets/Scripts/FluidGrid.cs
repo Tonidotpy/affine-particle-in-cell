@@ -1,0 +1,199 @@
+using UnityEngine;
+using static UnityEngine.Mathf;
+
+namespace FluidSimulation {
+    public class FluidGrid {
+        public enum CellType {
+            Fluid,
+            Solid,
+        };
+
+        struct PressureSolverData {
+            public int flowTop;
+            public int flowRight;
+            public int flowBottom;
+            public int flowLeft;
+            public int flowEdgeCount;
+            public bool isSolid;
+            public float velocityTerm;
+        };
+
+        public readonly int width;
+        public readonly int height;
+        public readonly int cellSize;
+
+        public readonly CellType[,] cellTypes;
+        public readonly float[,] velocitiesX;
+        public readonly float[,] velocitiesY;
+        public readonly float[,] pressure;
+        readonly PressureSolverData[,] pressureData;
+
+        const float density = 1f;
+        const float timeStep = 1f / 60f;
+
+        public FluidGrid(int width, int height, int cellSize) {
+            this.width = width;
+            this.height = height;
+            this.cellSize = cellSize;
+
+            cellTypes = new CellType[width, height];
+            velocitiesX = new float[width + 1, height];
+            velocitiesY = new float[width, height + 1];
+            pressureData = new PressureSolverData[width, height];
+            pressure = new float[width, height];
+
+            // Treat border as solids
+            for (int x = 0; x < width; ++x) {
+                cellTypes[x, 0] = CellType.Solid;
+                cellTypes[x, height - 1] = CellType.Solid;
+            }
+            for (int y = 0; y < height; ++y) {
+                cellTypes[0, y] = CellType.Solid;
+                cellTypes[width - 1, y] = CellType.Solid;
+            }
+        }
+
+        public bool IsSolid(int x, int y) {
+            bool outOfBounds = x < 0 || x >= width || y < 0 || y >= height;
+            return outOfBounds ? true : (cellTypes[x, y] == CellType.Solid);
+        }
+
+        public float GetPressure(int x, int y) {
+            bool outOfBounds = x < 0 || x >= width || y < 0 || y >= height;
+            return outOfBounds ? 0f : pressure[x, y];
+        }
+
+        public static float SampleBilinear(float[,] edgeValues, float cellSize, Vector2 pos) {
+            int edgeCountX = edgeValues.GetLength(0);
+            int edgeCountY = edgeValues.GetLength(1);
+            float w = (edgeCountX - 1) * cellSize;
+            float h = (edgeCountY - 1) * cellSize;
+
+			// Calculate indices of each edge for the current cell
+            float x = (pos.x + w * 0.5f) / cellSize;
+            float y = (pos.y + h * 0.5f) / cellSize;
+
+            int left = Clamp((int)x, 0, edgeCountX - 2);
+            int bottom = Clamp((int)y, 0, edgeCountY - 2);
+            int right = left + 1;
+            int top = bottom + 1;
+
+            // Calculate how far [0,1] the input point is along the current cell
+            float xFrac = Clamp01(x - left);
+            float yFrac = Clamp01(y - bottom);
+
+            // Bilinear interpolation
+            float interpTop = Lerp(edgeValues[left, top], edgeValues[right, top], xFrac);
+            float interpBottom = Lerp(edgeValues[left, bottom], edgeValues[right, bottom], xFrac);
+            return Lerp(interpBottom, interpTop, yFrac);
+        }
+
+        public Vector2 SampleVelocity(Vector2 pos) {
+            float vx = SampleBilinear(velocitiesX, cellSize, pos);
+            float vy = SampleBilinear(velocitiesY, cellSize, pos);
+            return new Vector2(vx, vy);
+        }
+
+        public float CalculateDivergenceAtCell(int x, int y) {
+            float velocityTop    = velocitiesY[x    , y + 1];
+            float velocityRight  = velocitiesX[x + 1, y    ];
+            float velocityBottom = velocitiesY[x    , y    ];
+            float velocityLeft   = velocitiesX[x    , y    ];
+
+            float gradientX = (velocityRight - velocityLeft) / cellSize;
+            float gradientY = (velocityTop - velocityBottom) / cellSize;
+            float gradient = gradientX + gradientY;
+            return gradient;
+        }
+
+        public void SolvePressure(int iterations) {
+            PreparePressureSolver();
+
+            for (int i = 0; i < iterations; ++i) {
+                RunPressureSolver();
+            }
+        }
+
+        void PreparePressureSolver() {
+            for (int x = 0; x < width; ++x) {
+                for (int y = 0; y < height; ++y) {
+                    int flowTop    = IsSolid(x    , y + 1) ? 0 : 1;
+                    int flowRight  = IsSolid(x + 1, y    ) ? 0 : 1;
+                    int flowBottom = IsSolid(x    , y - 1) ? 0 : 1;
+                    int flowLeft   = IsSolid(x - 1, y    ) ? 0 : 1;
+                    int flowEdgeCount = flowTop + flowRight + flowBottom + flowLeft;
+                    bool isSolid = IsSolid(x, y);
+
+                    float velocityTop    = velocitiesY[x    , y + 1];
+                    float velocityRight  = velocitiesX[x + 1, y    ];
+                    float velocityBottom = velocitiesY[x    , y    ];
+                    float velocityLeft   = velocitiesX[x    , y    ];
+                    float velocityTerm = (velocityTop - velocityBottom + velocityRight - velocityLeft) / timeStep;
+
+                    pressureData[x, y] = new PressureSolverData() {
+                        flowTop = flowTop,
+                        flowRight = flowRight,
+                        flowBottom = flowBottom,
+                        flowLeft = flowLeft,
+                        flowEdgeCount = flowEdgeCount,
+                        isSolid = isSolid,
+                        velocityTerm = velocityTerm,
+                    };
+                }
+            }
+        }
+
+        void RunPressureSolver() {
+            for (int x = 0; x < width; ++x) {
+                for (int y = 0; y < height; ++y) {
+                    float newPressure = 0;
+                    PressureSolverData info = pressureData[x, y];
+
+                    if (!info.isSolid && info.flowEdgeCount != 0) {
+                        float pressureTop    = GetPressure(x    , y + 1) * info.flowTop;
+                        float pressureRight  = GetPressure(x + 1, y    ) * info.flowRight;
+                        float pressureBottom = GetPressure(x    , y - 1) * info.flowBottom;
+                        float pressureLeft   = GetPressure(x - 1, y    ) * info.flowLeft;
+
+                        float pressureSum = pressureTop + pressureRight + pressureBottom + pressureLeft;
+                        newPressure = (pressureSum - density * cellSize * info.velocityTerm) / (float)info.flowEdgeCount;
+                    }
+
+                    pressure[x, y] = newPressure;
+                }
+            }
+        }
+
+        public void UpdateVelocities() {
+            float k = timeStep / (density * cellSize);
+
+            // Horizontal
+            for (int x = 0; x < velocitiesX.GetLength(0); ++x) {
+                for (int y = 0; y < velocitiesX.GetLength(1); ++y) {
+                    if (IsSolid(x, y) || IsSolid(x - 1, y)) {
+                        velocitiesX[x, y] = 0f;
+                        continue;
+                    }
+
+                    float pressureRight = GetPressure(x, y);
+                    float pressureLeft = GetPressure(x - 1, y);
+                    velocitiesX[x, y] -= k * (pressureRight - pressureLeft);
+                }
+            }
+
+            // Vertical
+            for (int x = 0; x < velocitiesY.GetLength(0); ++x) {
+                for (int y = 0; y < velocitiesY.GetLength(1); ++y) {
+                    if (IsSolid(x, y) || IsSolid(x, y - 1)) {
+                        velocitiesY[x, y] = 0f;
+                        continue;
+                    }
+
+                    float pressureTop = GetPressure(x, y);
+                    float pressureBottom = GetPressure(x, y - 1);
+                    velocitiesY[x, y] -= k * (pressureTop - pressureBottom);
+                }
+            }
+        }
+    }
+}
