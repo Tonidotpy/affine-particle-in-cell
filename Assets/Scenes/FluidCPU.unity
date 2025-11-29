@@ -164,10 +164,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b82d6dc2ba9f5749bac9d2fe0be6adb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulation.FluidTest
-  width: 12
-  height: 8
-  cellSize: 1
+  width: 46
+  height: 24
+  cellSize: 0.5
   solverIterations: 15
+  sor: 1.7
+  timeStepMultiplier: 1
 --- !u!114 &1170556643
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -184,8 +186,11 @@ MonoBehaviour:
   fontSize: 0.18
   interactionRadius: 0.5
   interactionStrength: 10
+  interactionColor: {r: 1, g: 1, b: 1, a: 0.3137255}
+  interactionActiveColor: {r: 0, g: 0.98039216, b: 0.08235294, a: 0.3137255}
   cellBorderThickness: 0.03
   cellColor: {r: 0.21698111, g: 0.21698111, b: 0.21698111, a: 1}
+  showVelocityArrows: 0
   velocityXColor: {r: 1, g: 0, b: 0, a: 1}
   velocityYColor: {r: 0, g: 1, b: 0, a: 1}
   velocityPointRadius: 0.04
@@ -196,9 +201,11 @@ MonoBehaviour:
   interpolatedVelocityPointRadius: 0.03
   interpolatedVelocityArrowLengthFactor: 0.02
   interpolatedVelocityArrowThickness: 0.015
+  showDivergenceValue: 0
   divergenceDisplayRange: 5
   negativeDivergenceColor: {r: 0.3254717, g: 0.46666667, b: 1, a: 0.6862745}
   positiveDivergenceColor: {r: 1, g: 0.4669811, b: 0.4669811, a: 0.68235296}
+  showPressureValue: 0
   pressureDisplayRange: 5
   negativePressureColor: {r: 0.4009434, g: 1, b: 0.4009434, a: 0.6862745}
   positivePressureColor: {r: 0.83180636, g: 0.3443396, b: 1, a: 0.6862745}

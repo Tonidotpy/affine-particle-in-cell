@@ -20,7 +20,7 @@ namespace FluidSimulation {
 
         public readonly int width;
         public readonly int height;
-        public readonly int cellSize;
+        public readonly float cellSize;
 
         public readonly Vector2 boundsSize;
         public readonly Vector2 bottomLeft;
@@ -40,7 +40,7 @@ namespace FluidSimulation {
         public float timeStepMultiplier = 1;
 		public float SOR = 1;
 
-        public FluidGrid(int width, int height, int cellSize) {
+        public FluidGrid(int width, int height, float cellSize) {
             this.width = width;
             this.height = height;
             this.cellSize = cellSize;

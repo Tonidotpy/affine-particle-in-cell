@@ -18,12 +18,15 @@ namespace FluidSimulation {
         [Header("Interaction")]
         public float interactionRadius;
         public float interactionStrength;
+        public Color interactionColor;
+        public Color interactionActiveColor;
 
 		[Header("Cell")]
 		public float cellBorderThickness;
         public Color cellColor;
 
         [Header("Velocity")]
+        public bool showVelocityArrows;
 		public Color velocityXColor;
 		public Color velocityYColor;
         public float velocityPointRadius;
@@ -38,11 +41,13 @@ namespace FluidSimulation {
         public float interpolatedVelocityArrowThickness;
         
         [Header("Divergence")]
+        public bool showDivergenceValue;
         public float divergenceDisplayRange;
         public Color negativeDivergenceColor;
         public Color positiveDivergenceColor;
         
         [Header("Pressure")]
+        public bool showPressureValue;
         public float pressureDisplayRange;
         public Color negativePressureColor;
         public Color positivePressureColor;
@@ -89,31 +94,36 @@ namespace FluidSimulation {
                 }
             }
 
-            // Draw horizontal velocities
-            for (int x = 0; x < fluidGrid.velocitiesX.GetLength(0); ++x) {
-                for (int y = 0; y < fluidGrid.velocitiesX.GetLength(1); ++y) {
-                    DrawVelocityArrow(
-                        fluidGrid.LeftEdgeCenter(x, y),
-                        Vector2.right * fluidGrid.velocitiesX[x, y],
-                        velocityXColor,
-                        velocityPointRadius,
-                        velocityArrowLengthFactor,
-                        velocityArrowThickness);
+            if (showVelocityArrows) {
+                // Draw horizontal velocities
+                for (int x = 0; x < fluidGrid.velocitiesX.GetLength(0); ++x) {
+                    for (int y = 0; y < fluidGrid.velocitiesX.GetLength(1); ++y) {
+                        DrawVelocityArrow(
+                            fluidGrid.LeftEdgeCenter(x, y),
+                            Vector2.right * fluidGrid.velocitiesX[x, y],
+                            velocityXColor,
+                            velocityPointRadius,
+                            velocityArrowLengthFactor,
+                            velocityArrowThickness);
+                    }
+                }
+
+                // Draw vertical velocities
+                for (int x = 0; x < fluidGrid.velocitiesY.GetLength(0); ++x) {
+                    for (int y = 0; y < fluidGrid.velocitiesY.GetLength(1); ++y) {
+                        DrawVelocityArrow(
+                            fluidGrid.BottomEdgeCenter(x, y),
+                            Vector2.up * fluidGrid.velocitiesY[x, y],
+                            velocityYColor,
+                            velocityPointRadius,
+                            velocityArrowLengthFactor,
+                            velocityArrowThickness);
+                    }
                 }
             }
 
-            // Draw vertical velocities
-            for (int x = 0; x < fluidGrid.velocitiesY.GetLength(0); ++x) {
-                for (int y = 0; y < fluidGrid.velocitiesY.GetLength(1); ++y) {
-                    DrawVelocityArrow(
-                        fluidGrid.BottomEdgeCenter(x, y),
-                        Vector2.up * fluidGrid.velocitiesY[x, y],
-                        velocityYColor,
-                        velocityPointRadius,
-                        velocityArrowLengthFactor,
-                        velocityArrowThickness);
-                }
-            }
+            // Draw mouse overlay
+			Draw.Point(mousePositionOld, interactionRadius, isInteracting ? interactionActiveColor : interactionColor);
         }
 
         void DrawCell(int x, int y) {
@@ -133,13 +143,17 @@ namespace FluidSimulation {
                     float divergence = fluidGrid.CalculateDivergenceAtCell(x, y);
                     float divergenceT = Abs(divergence) / divergenceDisplayRange;
                     col = Color.Lerp(col, divergence < 0 ? negativeDivergenceColor : positiveDivergenceColor, divergenceT);
-                    Draw.Text(FontType.JetbrainsMonoRegular, $"{divergence:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
+                    if (showDivergenceValue) {
+                        Draw.Text(FontType.JetbrainsMonoRegular, $"{divergence:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
+                    }
                     break;
                 case VisualizationMode.Pressure:
                     float pressure = fluidGrid.pressure[x, y];
                     float pressureT = Abs(pressure) / pressureDisplayRange;
                     col = Color.Lerp(col, pressure < 0 ? negativePressureColor : positivePressureColor, pressureT);
-                    Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
+                    if (showPressureValue) {
+                        Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
+                    }
                     break;
                 default:
                     break;

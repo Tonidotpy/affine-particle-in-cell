@@ -7,7 +7,7 @@ namespace FluidSimulation {
         [Header("Grid Settings")]
         public int width;
         public int height;
-        public int cellSize = 1;
+        public float cellSize = 1;
 
         [Header("Simulation Settings")]
         public int solverIterations = 1;
