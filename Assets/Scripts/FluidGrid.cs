@@ -1,5 +1,6 @@
 using UnityEngine;
 using static UnityEngine.Mathf;
+using System;
 
 namespace FluidSimulation {
     public class FluidGrid {
@@ -18,6 +19,8 @@ namespace FluidSimulation {
             public float velocityTerm;
         };
 
+        public FluidParcels parcels;
+
         public readonly int width;
         public readonly int height;
         public readonly float cellSize;
@@ -27,6 +30,7 @@ namespace FluidSimulation {
         public readonly float halfCellSize;
 
         public readonly CellType[,] cellTypes;
+        public readonly float[,] mass;
         public readonly float[,] velocitiesX;
         public readonly float[,] velocitiesY;
         public readonly float[,] velocitiesXNext;
@@ -46,6 +50,7 @@ namespace FluidSimulation {
             this.cellSize = cellSize;
 
             cellTypes = new CellType[width, height];
+            mass = new float[width, height];
             velocitiesX = new float[width + 1, height];
             velocitiesY = new float[width, height + 1];
             velocitiesYNext = new float[width, height + 1];
@@ -67,6 +72,10 @@ namespace FluidSimulation {
             boundsSize = new Vector2(width, height) * cellSize ;
             bottomLeft = -boundsSize * 0.5f;
             halfCellSize = cellSize * 0.5f;
+        }
+
+        public void PairParcels(FluidParcels parcels) {
+            this.parcels = parcels;
         }
 
         public Vector2 CellCenter(int x, int y) => bottomLeft + new Vector2(x + 0.5f, y + 0.5f) * cellSize;
@@ -130,6 +139,35 @@ namespace FluidSimulation {
             float gradientY = (velocityTop - velocityBottom) / cellSize;
             float gradient = gradientX + gradientY;
             return gradient;
+        }
+
+        public void Reset() {
+            Array.Clear(mass, 0, mass.Length);
+        }
+
+        public void TransferMass() {
+            for (int i = 0; i < parcels.count; ++i) {
+                Vector2 pos = parcels.position[i] - Vector2.one * 0.5f;
+                float x = (pos.x - bottomLeft.x) / cellSize;
+                float y = (pos.y - bottomLeft.y) / cellSize;
+
+                Vector2Int cell = CellCoordsFromPosition(pos);
+                int left = Clamp(cell.x, 0, width - 2);
+                int bottom = Clamp(cell.y, 0, height - 2);
+                int right = left + 1;
+                int top = bottom + 1;
+
+                // Calculate how far [0,1] the input point is along the current cell
+                float xFrac = Clamp01(x - left);
+                float yFrac = Clamp01(y - bottom);
+
+                // Distribute mass between adjacent cells
+                float m = parcels.mass[i];
+                mass[ left, bottom] += m * (1f - xFrac) * (1f - yFrac);
+                mass[right, bottom] += m * (     xFrac) * (1f - yFrac);
+                mass[ left,    top] += m * (1f - xFrac) * (     yFrac);
+                mass[right,    top] += m * (     xFrac) * (     yFrac);
+            }
         }
 
         public void SolvePressure(int iterations) {

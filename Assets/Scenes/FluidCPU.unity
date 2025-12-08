@@ -164,9 +164,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b82d6dc2ba9f5749bac9d2fe0be6adb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulation.FluidTest
-  width: 46
-  height: 24
-  cellSize: 0.5
+  parcelsCount: 4
+  width: 8
+  height: 8
+  cellSize: 1
   solverIterations: 15
   sor: 1.7
   timeStepMultiplier: 1
@@ -184,12 +185,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulation.FluidDrawer
   visualizationMode: 0
   fontSize: 0.18
-  interactionRadius: 0.5
+  interactionRadius: 2
   interactionStrength: 10
   interactionColor: {r: 1, g: 1, b: 1, a: 0.3137255}
   interactionActiveColor: {r: 0, g: 0.98039216, b: 0.08235294, a: 0.3137255}
+  parcelSize: 0.2
+  parcelColor: {r: 0.3160377, g: 0.5624113, b: 1, a: 1}
   cellBorderThickness: 0.03
   cellColor: {r: 0.21698111, g: 0.21698111, b: 0.21698111, a: 1}
+  showMassValue: 1
+  massDisplayRange: 1
+  massColor: {r: 0.7312201, g: 0.3915094, b: 1, a: 1}
   showVelocityArrows: 0
   velocityXColor: {r: 1, g: 0, b: 0, a: 1}
   velocityYColor: {r: 0, g: 1, b: 0, a: 1}

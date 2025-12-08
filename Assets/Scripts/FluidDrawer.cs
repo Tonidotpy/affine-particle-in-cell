@@ -7,6 +7,7 @@ namespace FluidSimulation {
     public class FluidDrawer : MonoBehaviour {
         public enum VisualizationMode {
             None,
+            Mass,
             Divergence,
             Pressure,
             Velocity,
@@ -21,9 +22,18 @@ namespace FluidSimulation {
         public Color interactionColor;
         public Color interactionActiveColor;
 
+		[Header("Parcel")]
+        public float parcelSize;
+        public Color parcelColor;
+
 		[Header("Cell")]
 		public float cellBorderThickness;
         public Color cellColor;
+
+        [Header("Mass")]
+        public bool showMassValue;
+        public float massDisplayRange;
+        public Color massColor;
 
         [Header("Velocity")]
         public bool showVelocityArrows;
@@ -52,11 +62,16 @@ namespace FluidSimulation {
         public Color negativePressureColor;
         public Color positivePressureColor;
 
+        FluidParcels fluidParcels;
         FluidGrid fluidGrid;
 		Vector2 cellDisplaySize;
 
         bool isInteracting;
         Vector2 mousePositionOld;
+
+        public void SetParcelsToVisualize(FluidParcels parcels) {
+            fluidParcels = parcels;
+        }
 
         public void SetFluidGridToVisualize(FluidGrid grid) {
             fluidGrid = grid;
@@ -71,6 +86,11 @@ namespace FluidSimulation {
                 for (int y = 0; y < fluidGrid.height; ++y) {
                     DrawCell(x, y);
                 }
+            }
+
+            // Draw parcels
+            for (int i = 0; i < fluidParcels.count; ++i) {
+                DrawParcel(i);
             }
 
             if (visualizationMode == VisualizationMode.Velocity) {
@@ -126,6 +146,12 @@ namespace FluidSimulation {
 			Draw.Point(mousePositionOld, interactionRadius, isInteracting ? interactionActiveColor : interactionColor);
         }
 
+        void DrawParcel(int i) {
+            Color col = parcelColor;
+            Vector2 pos = fluidParcels.position[i]; 
+            Draw.Point(pos, parcelSize, col);
+        }
+
         void DrawCell(int x, int y) {
             Color col = cellColor;
 
@@ -139,6 +165,14 @@ namespace FluidSimulation {
             }
 
             switch (visualizationMode) {
+                case VisualizationMode.Mass:
+                    float mass = fluidGrid.mass[x, y];
+                    float massT = Abs(mass) / massDisplayRange;
+                    col = Color.Lerp(col, massColor, massT);
+                    if (showMassValue) {
+                        Draw.Text(FontType.JetbrainsMonoRegular, $"{mass:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
+                    }
+                    break;
                 case VisualizationMode.Divergence:
                     float divergence = fluidGrid.CalculateDivergenceAtCell(x, y);
                     float divergenceT = Abs(divergence) / divergenceDisplayRange;
