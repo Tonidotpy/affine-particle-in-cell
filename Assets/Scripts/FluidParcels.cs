@@ -22,6 +22,7 @@ namespace FluidSimulation {
 
             // TODO: Remove
             position[0] = new Vector2(0.8f, 0.4f);
+            // position[0] = new Vector2(0.5f, 0.5f);
             for (int i = 0; i < count; ++i) {
                 mass[i] = 1f;
             }

@@ -33,7 +33,8 @@ namespace FluidSimulation {
         [Header("Mass")]
         public bool showMassValue;
         public float massDisplayRange;
-        public Color massColor;
+        public Color massXColor;
+        public Color massYColor;
 
         [Header("Velocity")]
         public bool showVelocityArrows;
@@ -85,6 +86,66 @@ namespace FluidSimulation {
             for (int x = 0; x < fluidGrid.width; ++x) {
                 for (int y = 0; y < fluidGrid.height; ++y) {
                     DrawCell(x, y);
+                }
+            }
+
+            if (visualizationMode == VisualizationMode.Mass) {
+                // Draw horizontal masses
+                for (int x = 0; x < fluidGrid.massX.GetLength(0); ++x) {
+                    for (int y = 0; y < fluidGrid.massX.GetLength(1); ++y) {
+                        float mass = fluidGrid.massX[x, y];
+                        float massT = Abs(mass) / massDisplayRange;
+                        Vector2 pos = fluidGrid.LeftEdgeCenter(x, y);
+
+                        Color col = massXColor;
+                        col.a *= massT;
+
+                        Draw.Diamond(
+                            pos,
+                            Vector2.one * fluidGrid.cellSize,
+                            col
+                        );
+
+                        if (showMassValue) {
+                            Draw.Text(
+                                FontType.JetbrainsMonoRegular,
+                                $"{mass:0.00}",
+                                fontSize,
+                                pos,
+                                Anchor.Centre,
+                                Color.white
+                            );
+                        }
+                    }
+                }
+
+                // Draw vertical masses
+                for (int x = 0; x < fluidGrid.massY.GetLength(0); ++x) {
+                    for (int y = 0; y < fluidGrid.massY.GetLength(1); ++y) {
+                        float mass = fluidGrid.massY[x, y];
+                        float massT = Abs(mass) / massDisplayRange;
+                        Vector2 pos = fluidGrid.BottomEdgeCenter(x, y);
+
+                        Color col = massYColor;
+                        col.a *= massT;
+
+                        Draw.Diamond(
+                            pos,
+                            Vector2.one * fluidGrid.cellSize,
+                            col
+                        );
+
+                        if (showMassValue) {
+                            Draw.Text(
+                                FontType.JetbrainsMonoRegular,
+                                $"{mass:0.00}",
+                                fontSize,
+                                pos,
+                                Anchor.Centre,
+                                Color.white
+                            );
+                        }
+                    }
                 }
             }
 
@@ -165,14 +226,6 @@ namespace FluidSimulation {
             }
 
             switch (visualizationMode) {
-                case VisualizationMode.Mass:
-                    float mass = fluidGrid.mass[x, y];
-                    float massT = Abs(mass) / massDisplayRange;
-                    col = Color.Lerp(col, massColor, massT);
-                    if (showMassValue) {
-                        Draw.Text(FontType.JetbrainsMonoRegular, $"{mass:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
-                    }
-                    break;
                 case VisualizationMode.Divergence:
                     float divergence = fluidGrid.CalculateDivergenceAtCell(x, y);
                     float divergenceT = Abs(divergence) / divergenceDisplayRange;

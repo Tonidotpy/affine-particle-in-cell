@@ -30,7 +30,10 @@ namespace FluidSimulation {
         public readonly float halfCellSize;
 
         public readonly CellType[,] cellTypes;
-        public readonly float[,] mass;
+        public readonly float[,] massX;
+        public readonly float[,] massY;
+        public readonly float[,] momentumX;
+        public readonly float[,] momentumY;
         public readonly float[,] velocitiesX;
         public readonly float[,] velocitiesY;
         public readonly float[,] velocitiesXNext;
@@ -50,7 +53,10 @@ namespace FluidSimulation {
             this.cellSize = cellSize;
 
             cellTypes = new CellType[width, height];
-            mass = new float[width, height];
+            massX = new float[width + 1, height];
+            massY = new float[width, height + 1];
+            momentumX = new float[width + 1, height];
+            momentumY = new float[width, height + 1];
             velocitiesX = new float[width + 1, height];
             velocitiesY = new float[width, height + 1];
             velocitiesYNext = new float[width, height + 1];
@@ -142,31 +148,39 @@ namespace FluidSimulation {
         }
 
         public void Reset() {
-            Array.Clear(mass, 0, mass.Length);
+            Array.Clear(massX, 0, massX.Length);
+            Array.Clear(massY, 0, massY.Length);
+            Array.Clear(momentumX, 0, momentumX.Length);
+            Array.Clear(momentumY, 0, momentumY.Length);
+        }
+
+        void TransferMassBilinear(float[,] mass, Vector2 pos, float parcelMass) {
+            float x = (pos.x - bottomLeft.x) / cellSize;
+            float y = (pos.y - bottomLeft.y) / cellSize;
+
+            Vector2Int cell = CellCoordsFromPosition(pos);
+            int left = Clamp(cell.x, 0, width - 2);
+            int bottom = Clamp(cell.y, 0, height - 2);
+            int right = left + 1;
+            int top = bottom + 1;
+
+            // Calculate how far [0,1] the input point is along the current cell
+            float xFrac = Clamp01(x - left);
+            float yFrac = Clamp01(y - bottom);
+
+            // Distribute mass between adjacent cells
+            mass[ left, bottom] += parcelMass * (1f - xFrac) * (1f - yFrac);
+            mass[right, bottom] += parcelMass * (     xFrac) * (1f - yFrac);
+            mass[ left,    top] += parcelMass * (1f - xFrac) * (     yFrac);
+            mass[right,    top] += parcelMass * (     xFrac) * (     yFrac);
         }
 
         public void TransferMass() {
             for (int i = 0; i < parcels.count; ++i) {
-                Vector2 pos = parcels.position[i] - Vector2.one * 0.5f;
-                float x = (pos.x - bottomLeft.x) / cellSize;
-                float y = (pos.y - bottomLeft.y) / cellSize;
-
-                Vector2Int cell = CellCoordsFromPosition(pos);
-                int left = Clamp(cell.x, 0, width - 2);
-                int bottom = Clamp(cell.y, 0, height - 2);
-                int right = left + 1;
-                int top = bottom + 1;
-
-                // Calculate how far [0,1] the input point is along the current cell
-                float xFrac = Clamp01(x - left);
-                float yFrac = Clamp01(y - bottom);
-
-                // Distribute mass between adjacent cells
+                Vector2 pos = parcels.position[i];
                 float m = parcels.mass[i];
-                mass[ left, bottom] += m * (1f - xFrac) * (1f - yFrac);
-                mass[right, bottom] += m * (     xFrac) * (1f - yFrac);
-                mass[ left,    top] += m * (1f - xFrac) * (     yFrac);
-                mass[right,    top] += m * (     xFrac) * (     yFrac);
+                TransferMassBilinear(massX, pos - Vector2.up * 0.5f, m);
+                TransferMassBilinear(massY, pos - Vector2.right * 0.5f, m);
             }
         }
 
