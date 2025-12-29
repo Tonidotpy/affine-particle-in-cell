@@ -11,6 +11,8 @@ namespace FluidSimulation {
             Divergence,
             Pressure,
             Velocity,
+
+            VelocityUI,
         };
 
 		public VisualizationMode visualizationMode;
@@ -63,6 +65,10 @@ namespace FluidSimulation {
         public Color negativePressureColor;
         public Color positivePressureColor;
 
+        [Header("Velocity-UI")]
+        public float maxVelocityVisualized = 5f;
+        public Gradient velocityColorMap;
+        public bool showCenterVelocityArrows;
         FluidParcels fluidParcels;
         FluidGrid fluidGrid;
 		Vector2 cellDisplaySize;
@@ -175,6 +181,22 @@ namespace FluidSimulation {
                 }
             }
 
+            if(visualizationMode == VisualizationMode.VelocityUI && showCenterVelocityArrows) {
+                for (int x = 0; x < fluidGrid.width; ++x) {
+                    for (int y = 0; y < fluidGrid.height; ++y) {
+                        Vector2 position = fluidGrid.CellCenter(x, y);
+                        Vector2 velocity = fluidGrid.SampleVelocity(position);
+                        DrawVelocityArrow(
+                            position,
+                            velocity,
+                            interpolatedVelocityColor,
+                            interpolatedVelocityPointRadius,
+                            interpolatedVelocityArrowLengthFactor,
+                            interpolatedVelocityArrowThickness);
+                    }
+                }
+            }
+
             if (showVelocityArrows) {
                 // Draw horizontal velocities
                 for (int x = 0; x < fluidGrid.velocitiesX.GetLength(0); ++x) {
@@ -241,6 +263,15 @@ namespace FluidSimulation {
                     if (showPressureValue) {
                         Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
                     }
+                    break;
+                case VisualizationMode.VelocityUI:
+                    if(fluidGrid.cellTypes[x, y] == FluidGrid.CellType.Solid) {
+                        break;
+                    }
+                    Vector2 position = fluidGrid.CellCenter(x, y);
+                    Vector2 velocity = fluidGrid.SampleVelocity(position);
+                    float speedT = velocity.magnitude / maxVelocityVisualized;
+                    col = velocityColorMap.Evaluate(speedT);
                     break;
                 default:
                     break;
