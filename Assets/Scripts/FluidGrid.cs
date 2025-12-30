@@ -45,8 +45,7 @@ namespace FluidSimulation {
         const float density = 1f;
         float timeStep => 1f / 60f * timeStepMultiplier;
         public float timeStepMultiplier = 1;
-		public float SOR = 1;
-
+        public float SOR = 1;
         public FluidGrid(int width, int height, float cellSize) {
             this.width = width;
             this.height = height;
@@ -75,7 +74,7 @@ namespace FluidSimulation {
             }
 
             // Pre calculate useful values
-            boundsSize = new Vector2(width, height) * cellSize ;
+            boundsSize = new Vector2(width, height) * cellSize;
             bottomLeft = -boundsSize * 0.5f;
             halfCellSize = cellSize * 0.5f;
         }
@@ -110,7 +109,7 @@ namespace FluidSimulation {
             float w = (edgeCountX - 1) * cellSize;
             float h = (edgeCountY - 1) * cellSize;
 
-			// Calculate indices of each edge for the current cell
+            // Calculate indices of each edge for the current cell
             float x = (pos.x + w * 0.5f) / cellSize;
             float y = (pos.y + h * 0.5f) / cellSize;
 
@@ -136,10 +135,10 @@ namespace FluidSimulation {
         }
 
         public float CalculateDivergenceAtCell(int x, int y) {
-            float velocityTop    = velocitiesY[x    , y + 1];
-            float velocityRight  = velocitiesX[x + 1, y    ];
-            float velocityBottom = velocitiesY[x    , y    ];
-            float velocityLeft   = velocitiesX[x    , y    ];
+            float velocityTop = velocitiesY[x, y + 1];
+            float velocityRight = velocitiesX[x + 1, y];
+            float velocityBottom = velocitiesY[x, y];
+            float velocityLeft = velocitiesX[x, y];
 
             float gradientX = (velocityRight - velocityLeft) / cellSize;
             float gradientY = (velocityTop - velocityBottom) / cellSize;
@@ -169,10 +168,10 @@ namespace FluidSimulation {
             float yFrac = Clamp01(y - bottom);
 
             // Distribute mass between adjacent cells
-            mass[ left, bottom] += parcelMass * (1f - xFrac) * (1f - yFrac);
-            mass[right, bottom] += parcelMass * (     xFrac) * (1f - yFrac);
-            mass[ left,    top] += parcelMass * (1f - xFrac) * (     yFrac);
-            mass[right,    top] += parcelMass * (     xFrac) * (     yFrac);
+            mass[left, bottom] += parcelMass * (1f - xFrac) * (1f - yFrac);
+            mass[right, bottom] += parcelMass * (xFrac) * (1f - yFrac);
+            mass[left, top] += parcelMass * (1f - xFrac) * (yFrac);
+            mass[right, top] += parcelMass * (xFrac) * (yFrac);
         }
 
         public void TransferMass() {
@@ -195,17 +194,17 @@ namespace FluidSimulation {
         void PreparePressureSolver() {
             for (int x = 0; x < width; ++x) {
                 for (int y = 0; y < height; ++y) {
-                    int flowTop    = IsSolid(x    , y + 1) ? 0 : 1;
-                    int flowRight  = IsSolid(x + 1, y    ) ? 0 : 1;
-                    int flowBottom = IsSolid(x    , y - 1) ? 0 : 1;
-                    int flowLeft   = IsSolid(x - 1, y    ) ? 0 : 1;
+                    int flowTop = IsSolid(x, y + 1) ? 0 : 1;
+                    int flowRight = IsSolid(x + 1, y) ? 0 : 1;
+                    int flowBottom = IsSolid(x, y - 1) ? 0 : 1;
+                    int flowLeft = IsSolid(x - 1, y) ? 0 : 1;
                     int flowEdgeCount = flowTop + flowRight + flowBottom + flowLeft;
                     bool isSolid = IsSolid(x, y);
 
-                    float velocityTop    = velocitiesY[x    , y + 1];
-                    float velocityRight  = velocitiesX[x + 1, y    ];
-                    float velocityBottom = velocitiesY[x    , y    ];
-                    float velocityLeft   = velocitiesX[x    , y    ];
+                    float velocityTop = velocitiesY[x, y + 1];
+                    float velocityRight = velocitiesX[x + 1, y];
+                    float velocityBottom = velocitiesY[x, y];
+                    float velocityLeft = velocitiesX[x, y];
                     float velocityTerm = (velocityTop - velocityBottom + velocityRight - velocityLeft) / timeStep;
 
                     pressureData[x, y] = new PressureSolverData() {
@@ -228,10 +227,10 @@ namespace FluidSimulation {
                     PressureSolverData info = pressureData[x, y];
 
                     if (!info.isSolid && info.flowEdgeCount != 0) {
-                        float pressureTop    = GetPressure(x    , y + 1) * info.flowTop;
-                        float pressureRight  = GetPressure(x + 1, y    ) * info.flowRight;
-                        float pressureBottom = GetPressure(x    , y - 1) * info.flowBottom;
-                        float pressureLeft   = GetPressure(x - 1, y    ) * info.flowLeft;
+                        float pressureTop = GetPressure(x, y + 1) * info.flowTop;
+                        float pressureRight = GetPressure(x + 1, y) * info.flowRight;
+                        float pressureBottom = GetPressure(x, y - 1) * info.flowBottom;
+                        float pressureLeft = GetPressure(x - 1, y) * info.flowLeft;
 
                         float pressureSum = pressureTop + pressureRight + pressureBottom + pressureLeft;
                         newPressure = (pressureSum - density * cellSize * info.velocityTerm) / (float)info.flowEdgeCount;

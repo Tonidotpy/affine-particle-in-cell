@@ -29,6 +29,7 @@
 # Visual Studio cache directory
 .vs/
 .vscode/
+.editorconfig
 # Gradle cache directory
 .gradle/
 
@@ -38,6 +39,7 @@ ExportedObj/
 *.csproj
 *.unityproj
 *.sln
+*.slnx
 *.suo
 *.tmp
 *.user

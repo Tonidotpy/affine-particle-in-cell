@@ -15,7 +15,7 @@ namespace FluidSimulation {
             VelocityUI,
         };
 
-		public VisualizationMode visualizationMode;
+        public VisualizationMode visualizationMode;
         public float fontSize;
 
         [Header("Interaction")]
@@ -24,12 +24,12 @@ namespace FluidSimulation {
         public Color interactionColor;
         public Color interactionActiveColor;
 
-		[Header("Parcel")]
+        [Header("Parcel")]
         public float parcelSize;
         public Color parcelColor;
 
-		[Header("Cell")]
-		public float cellBorderThickness;
+        [Header("Cell")]
+        public float cellBorderThickness;
         public Color cellColor;
 
         [Header("Mass")]
@@ -40,25 +40,25 @@ namespace FluidSimulation {
 
         [Header("Velocity")]
         public bool showVelocityArrows;
-		public Color velocityXColor;
-		public Color velocityYColor;
+        public Color velocityXColor;
+        public Color velocityYColor;
         public float velocityPointRadius;
         public float velocityArrowLengthFactor;
         public float velocityArrowThickness;
 
         [Header("Interpolated Velocity")]
         public int interpolatedGridResolution;
-		public Color interpolatedVelocityColor;
+        public Color interpolatedVelocityColor;
         public float interpolatedVelocityPointRadius;
         public float interpolatedVelocityArrowLengthFactor;
         public float interpolatedVelocityArrowThickness;
-        
+
         [Header("Divergence")]
         public bool showDivergenceValue;
         public float divergenceDisplayRange;
         public Color negativeDivergenceColor;
         public Color positiveDivergenceColor;
-        
+
         [Header("Pressure")]
         public bool showPressureValue;
         public float pressureDisplayRange;
@@ -71,7 +71,7 @@ namespace FluidSimulation {
         public bool showCenterVelocityArrows;
         FluidParcels fluidParcels;
         FluidGrid fluidGrid;
-		Vector2 cellDisplaySize;
+        Vector2 cellDisplaySize;
 
         bool isInteracting;
         Vector2 mousePositionOld;
@@ -86,7 +86,7 @@ namespace FluidSimulation {
         }
 
         public void Visualize() {
-			Draw.StartLayerIfNotInMatching(Vector2.zero, 1, false);
+            Draw.StartLayerIfNotInMatching(Vector2.zero, 1, false);
 
             // Draw grid
             for (int x = 0; x < fluidGrid.width; ++x) {
@@ -181,7 +181,7 @@ namespace FluidSimulation {
                 }
             }
 
-            if(visualizationMode == VisualizationMode.VelocityUI && showCenterVelocityArrows) {
+            if (visualizationMode == VisualizationMode.VelocityUI && showCenterVelocityArrows) {
                 for (int x = 0; x < fluidGrid.width; ++x) {
                     for (int y = 0; y < fluidGrid.height; ++y) {
                         Vector2 position = fluidGrid.CellCenter(x, y);
@@ -226,12 +226,12 @@ namespace FluidSimulation {
             }
 
             // Draw mouse overlay
-			Draw.Point(mousePositionOld, interactionRadius, isInteracting ? interactionActiveColor : interactionColor);
+            Draw.Point(mousePositionOld, interactionRadius, isInteracting ? interactionActiveColor : interactionColor);
         }
 
         void DrawParcel(int i) {
             Color col = parcelColor;
-            Vector2 pos = fluidParcels.position[i]; 
+            Vector2 pos = fluidParcels.position[i];
             Draw.Point(pos, parcelSize, col);
         }
 
@@ -265,7 +265,7 @@ namespace FluidSimulation {
                     }
                     break;
                 case VisualizationMode.VelocityUI:
-                    if(fluidGrid.cellTypes[x, y] == FluidGrid.CellType.Solid) {
+                    if (fluidGrid.cellTypes[x, y] == FluidGrid.CellType.Solid) {
                         break;
                     }
                     Vector2 position = fluidGrid.CellCenter(x, y);
@@ -286,8 +286,7 @@ namespace FluidSimulation {
             Color col,
             float pointRadius,
             float arrowLengthFactor,
-            float arrowThickness)
-        {
+            float arrowThickness) {
             Draw.Point(pos, pointRadius, col);
             Draw.Arrow(pos, pos + velocity * arrowLengthFactor, arrowThickness, arrowThickness * 3.5f, 32, col);
         }
@@ -296,7 +295,7 @@ namespace FluidSimulation {
             Vector2 mousePosition = InputHelper.MousePosWorld;
             isInteracting = InputHelper.IsMouseHeld(MouseButton.Left);
 
-			if (InputHelper.IsKeyDownThisFrame(KeyCode.Tab)) {
+            if (InputHelper.IsKeyDownThisFrame(KeyCode.Tab)) {
                 var modeCount = VisualizationMode.GetNames(typeof(VisualizationMode)).Length;
                 int direction = InputHelper.ShiftIsHeld ? -1 : 1;
 
@@ -329,7 +328,7 @@ namespace FluidSimulation {
 
             }
 
-			mousePositionOld = mousePosition;
+            mousePositionOld = mousePosition;
         }
     }
 }

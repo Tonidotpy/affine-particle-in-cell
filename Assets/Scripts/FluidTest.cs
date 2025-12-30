@@ -20,7 +20,7 @@ namespace FluidSimulation {
         FluidDrawer fluidDrawer;
         FluidParcels fluidParcels;
         FluidGrid fluidGrid;
- 
+
         void Start() {
             fluidDrawer = GetComponent<FluidDrawer>();
             fluidParcels = new FluidParcels(parcelsCount);
@@ -53,7 +53,7 @@ namespace FluidSimulation {
             // Solve for pressure
             fluidGrid.SolvePressure(solverIterations);
             fluidGrid.UpdateVelocities();
-            
+
             // Update visualization
             fluidDrawer.Visualize();
 
