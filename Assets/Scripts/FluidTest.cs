@@ -59,6 +59,7 @@ namespace FluidSimulation {
 
             // Advection
             fluidGrid.AdvectVelocity();
+            fluidGrid.AdvectSmoke();
         }
 
         void HandleInput() {
@@ -66,6 +67,9 @@ namespace FluidSimulation {
 
             if (Input.GetKeyDown(KeyCode.C)) {
                 fluidGrid.ClearVelocities();
+            }
+            if (Input.GetKeyDown(KeyCode.X)) {
+                fluidGrid.ClearSmoke();
             }
         }
     }

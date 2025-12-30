@@ -42,10 +42,14 @@ namespace FluidSimulation {
         public readonly float[,] pressure;
         readonly PressureSolverData[,] pressureData;
 
+        public float[,] smokeMap;
+        public float[,] smokeMapTemp;
+
         const float density = 1f;
         float timeStep => 1f / 60f * timeStepMultiplier;
         public float timeStepMultiplier = 1;
         public float SOR = 1;
+
         public FluidGrid(int width, int height, float cellSize) {
             this.width = width;
             this.height = height;
@@ -62,6 +66,8 @@ namespace FluidSimulation {
             velocitiesXNext = new float[width + 1, height];
             pressureData = new PressureSolverData[width, height];
             pressure = new float[width, height];
+            smokeMap = new float[width, height];
+            smokeMapTemp = new float[width, height];
 
             // Treat border as solids
             for (int x = 0; x < width; ++x) {
@@ -333,6 +339,55 @@ namespace FluidSimulation {
             for (int x = 0; x < width; ++x) {
                 for (int y = 0; y < height; ++y) {
                     pressure[x, y] = 0;
+                }
+            }
+        }
+
+        public void AdvectSmoke() {
+            for (int x = 0; x < smokeMap.GetLength(0); ++x) {
+                for (int y = 0; y < smokeMap.GetLength(1); ++y) {
+                    Vector2 position = CellCenter(x, y);
+                    Vector2 velocity = SampleVelocity(position);
+                    Vector2 positionPrev = position - velocity * timeStep;
+                    smokeMapTemp[x, y] = SampleBilinear(smokeMap, cellSize, positionPrev);
+                }
+            }
+
+            for (int x = 0; x < smokeMap.GetLength(0); ++x) {
+                for (int y = 0; y < smokeMap.GetLength(1); ++y) {
+                    smokeMap[x, y] = smokeMapTemp[x, y];
+                }
+            }
+        }
+
+        public void AddSmokeAtPosition(Vector2 pos, float amount, float radius) {
+            Vector2Int centerCell = CellCoordsFromPosition(pos);
+            int radiusInCells = Mathf.CeilToInt(radius / cellSize);
+
+            for (int dx = -radiusInCells; dx <= radiusInCells; ++dx) {
+                for (int dy = -radiusInCells; dy <= radiusInCells; ++dy) {
+                    int x = centerCell.x + dx;
+                    int y = centerCell.y + dy;
+
+                    if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1) {
+                        continue;
+                    }
+
+                    Vector2 cellCenter = CellCenter(x, y);
+                    float dist = Vector2.Distance(pos, cellCenter);
+                    if (dist <= radius) {
+                        float falloff = 1f - (dist / radius);
+                        smokeMap[x, y] += amount * falloff;
+                    }
+                }
+            }
+        }
+
+        public void ClearSmoke() {
+            for (int x = 0; x < smokeMap.GetLength(0); ++x) {
+                for (int y = 0; y < smokeMap.GetLength(1); ++y) {
+                    smokeMap[x, y] = 0f;
+                    smokeMapTemp[x, y] = 0f;
                 }
             }
         }

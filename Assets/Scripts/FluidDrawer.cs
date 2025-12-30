@@ -11,8 +11,8 @@ namespace FluidSimulation {
             Divergence,
             Pressure,
             Velocity,
-
             VelocityUI,
+            Smoke,
         };
 
         public VisualizationMode visualizationMode;
@@ -72,6 +72,13 @@ namespace FluidSimulation {
         FluidParcels fluidParcels;
         FluidGrid fluidGrid;
         Vector2 cellDisplaySize;
+
+        [Header("Smoke")]
+        public bool showSmokeValue;
+        public float smokeDisplayRange;
+        public Color smokeColor;
+        public float smokeAmountPerInteraction;
+        public float smokeSpawnRadius;
 
         bool isInteracting;
         Vector2 mousePositionOld;
@@ -273,6 +280,14 @@ namespace FluidSimulation {
                     float speedT = velocity.magnitude / maxVelocityVisualized;
                     col = velocityColorMap.Evaluate(speedT);
                     break;
+                case VisualizationMode.Smoke:
+                    float smokeAmount = fluidGrid.smokeMap[x, y];
+                    float smokeT = Mathf.Clamp01(smokeAmount / smokeDisplayRange);
+                    col = Color.Lerp(col, smokeColor, smokeT);
+                    if (showSmokeValue) {
+                        Draw.Text(FontType.JetbrainsMonoRegular, $"{smokeAmount:0.00}", fontSize, fluidGrid.CellCenter(x, y), Anchor.Centre, Color.white);
+                    }
+                    break;
                 default:
                     break;
             }
@@ -326,6 +341,10 @@ namespace FluidSimulation {
                     }
                 }
 
+            }
+
+            if (InputHelper.IsMouseHeld(MouseButton.Right)) {
+                fluidGrid.AddSmokeAtPosition(mousePosition, smokeAmountPerInteraction, smokeSpawnRadius);
             }
 
             mousePositionOld = mousePosition;
