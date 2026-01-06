@@ -74,11 +74,11 @@ namespace FluidSimulation {
             }
             if (Input.GetKeyDown(KeyCode.S)) {
                 Vector2 mousePosition = InputHelper.MousePosWorld;
-                fluidGrid.AddShapeAtPosition(mousePosition, fluidDrawer.shapeRadius);
+                fluidGrid.AddPolygonAtPosition(mousePosition, fluidDrawer.shapeSize, fluidDrawer.shapeVertices);
             }
             if (Input.GetKeyDown(KeyCode.D)) {
                 Vector2 mousePosition = InputHelper.MousePosWorld;
-                fluidGrid.AddCircleAtPosition(mousePosition, fluidDrawer.shapeRadius);
+                fluidGrid.AddCircleAtPosition(mousePosition, fluidDrawer.shapeSize, fluidDrawer.roundness);
             }
             if (Input.GetKeyDown(KeyCode.Z)) {
                 fluidGrid.ClearShapes();

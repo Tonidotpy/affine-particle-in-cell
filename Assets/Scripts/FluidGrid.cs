@@ -405,7 +405,7 @@ namespace FluidSimulation {
             }
         }
 
-        public void AddCircleAtPosition(Vector2 position, float radius) {
+        public void AddCircleAtPosition(Vector2 position, float radius, float roundness) {
             Vector2Int centerCoord = CellCoordsFromPosition(position);
             int numCellsHalf = CeilToInt(radius / cellSize * 0.5f);
             for (int offx = -numCellsHalf; offx <= numCellsHalf; ++offx) {
@@ -415,11 +415,45 @@ namespace FluidSimulation {
                     if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1)
                         continue;
                     float dist = Vector2.Distance(new Vector2(x, y), centerCoord);
-                    if (dist <= radius) {
+                    if (dist <= radius + roundness) {
                         cellTypes[x, y] = CellType.Solid;
                     }
                 }
             }
+        }
+        public void AddPolygonAtPosition(Vector2 position, float size, int numVertices) {
+            Vector2Int centerCoord = CellCoordsFromPosition(position);
+            int numCellsHalf = CeilToInt(size / cellSize);
+
+            for (int offx = -numCellsHalf; offx <= numCellsHalf; ++offx) {
+                for (int offy = -numCellsHalf; offy <= numCellsHalf; ++offy) {
+                    int x = centerCoord.x + offx;
+                    int y = centerCoord.y + offy;
+                    if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1)
+                        continue;
+
+                    Vector2 cellPos = new Vector2(x, y);
+                    Vector2 offset = cellPos - (Vector2)centerCoord;
+
+                    if (IsPointInPolygon(offset, size, numVertices)) {
+                        cellTypes[x, y] = CellType.Solid;
+                    }
+                }
+            }
+        }
+
+        bool IsPointInPolygon(Vector2 point, float radius, int numVertices) {
+            float angle = Atan2(point.y, point.x) - (0.5f * PI);
+            float distance = point.magnitude;
+
+            float anglePerVertex = 2f * PI / numVertices;
+            float normalizedAngle = angle % anglePerVertex;
+            if (normalizedAngle < 0) normalizedAngle += anglePerVertex;
+
+            float maxAngle = anglePerVertex * 0.5f;
+            float maxDistance = radius / Cos(Abs(normalizedAngle - maxAngle));
+
+            return distance <= maxDistance;
         }
 
         public void ClearShapes() {
