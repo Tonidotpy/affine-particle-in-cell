@@ -253,6 +253,7 @@ MonoBehaviour:
   smokeColor: {r: 0, g: 0, b: 1, a: 1}
   smokeAmountPerInteraction: 0.25
   smokeSpawnRadius: 1
+  shapeRadius: 3
 --- !u!1 &1622303229
 GameObject:
   m_ObjectHideFlags: 0

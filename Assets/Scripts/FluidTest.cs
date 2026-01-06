@@ -1,4 +1,5 @@
 using UnityEngine;
+using Seb.Helpers;
 using static UnityEngine.Mathf;
 
 namespace FluidSimulation {
@@ -70,6 +71,17 @@ namespace FluidSimulation {
             }
             if (Input.GetKeyDown(KeyCode.X)) {
                 fluidGrid.ClearSmoke();
+            }
+            if (Input.GetKeyDown(KeyCode.S)) {
+                Vector2 mousePosition = InputHelper.MousePosWorld;
+                fluidGrid.AddShapeAtPosition(mousePosition, fluidDrawer.shapeRadius);
+            }
+            if (Input.GetKeyDown(KeyCode.D)) {
+                Vector2 mousePosition = InputHelper.MousePosWorld;
+                fluidGrid.AddCircleAtPosition(mousePosition, fluidDrawer.shapeRadius);
+            }
+            if (Input.GetKeyDown(KeyCode.Z)) {
+                fluidGrid.ClearShapes();
             }
         }
     }

@@ -369,7 +369,7 @@ namespace FluidSimulation {
                     int x = centerCell.x + dx;
                     int y = centerCell.y + dy;
 
-                    if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1) {
+                    if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1 || cellTypes[x, y] == CellType.Solid) {
                         continue;
                     }
 
@@ -388,6 +388,46 @@ namespace FluidSimulation {
                 for (int y = 0; y < smokeMap.GetLength(1); ++y) {
                     smokeMap[x, y] = 0f;
                     smokeMapTemp[x, y] = 0f;
+                }
+            }
+        }
+        public void AddShapeAtPosition(Vector2 position, float radius) {
+            Vector2Int centerCoord = CellCoordsFromPosition(position);
+            int numCellsHalf = CeilToInt(radius / cellSize * 0.5f);
+            for (int offx = -numCellsHalf; offx <= numCellsHalf; ++offx) {
+                for (int offy = -numCellsHalf; offy <= numCellsHalf; ++offy) {
+                    int x = centerCoord.x + offx;
+                    int y = centerCoord.y + offy;
+                    if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1)
+                        continue;
+                    cellTypes[x, y] = CellType.Solid;
+                }
+            }
+        }
+
+        public void AddCircleAtPosition(Vector2 position, float radius) {
+            Vector2Int centerCoord = CellCoordsFromPosition(position);
+            int numCellsHalf = CeilToInt(radius / cellSize * 0.5f);
+            for (int offx = -numCellsHalf; offx <= numCellsHalf; ++offx) {
+                for (int offy = -numCellsHalf; offy <= numCellsHalf; ++offy) {
+                    int x = centerCoord.x + offx;
+                    int y = centerCoord.y + offy;
+                    if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1)
+                        continue;
+                    float dist = Vector2.Distance(new Vector2(x, y), centerCoord);
+                    if (dist <= radius) {
+                        cellTypes[x, y] = CellType.Solid;
+                    }
+                }
+            }
+        }
+
+        public void ClearShapes() {
+            for (int x = 0; x < width; ++x) {
+                for (int y = 0; y < height; ++y) {
+                    if (x == 0 || x == width - 1 || y == 0 || y == height - 1)
+                        continue;
+                    cellTypes[x, y] = CellType.Fluid;
                 }
             }
         }

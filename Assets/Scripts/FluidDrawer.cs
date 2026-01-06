@@ -80,6 +80,9 @@ namespace FluidSimulation {
         public float smokeAmountPerInteraction;
         public float smokeSpawnRadius;
 
+        [Header("Shape")]
+        public float shapeRadius;
+
         bool isInteracting;
         Vector2 mousePositionOld;
 
