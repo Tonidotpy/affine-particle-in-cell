@@ -105,7 +105,7 @@ namespace FluidSimulation {
         }
 
         public float GetPressure(int x, int y) {
-            bool outOfBounds = x < 0 || x >= width || y < 0 || y >= height;
+            bool outOfBounds = x < 0 || x >= width || y < 0 || y >= height || IsSolid(x, y);
             return outOfBounds ? 0f : pressure[x, y];
         }
 
