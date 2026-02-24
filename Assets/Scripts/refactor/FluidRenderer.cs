@@ -1,0 +1,215 @@
+using UnityEngine;
+using Seb.Helpers;
+using Seb.Vis;
+using static UnityEngine.Mathf;
+
+namespace FluidSimulationRefactor {
+public class FluidRenderer : MonoBehaviour {
+    public enum VisualizationMode {
+        None,
+        Velocity,
+        VelocityMap,
+        Divergence,
+        Pressure,
+        Smoke,
+    }
+
+    FluidGridMac grid;
+    bool isRenderingEnabled;
+
+    public VisualizationMode visualizationMode = VisualizationMode.None;
+    public float fontSize = 0.18f;
+
+    [Header("Input")]
+    public float inputRadius = 0.5f;
+    public Color inputColor = new Color(1f, 1f, 1f, 0.3f);
+    public Color inputActiveColor = new Color(0f, 1f, 0.1f, 0.3f);
+
+    [Header("Grid settings")]
+    [Min(0.1f)]
+    public float CellSize = 1f;
+    [Range(0, 0.2f)]
+    public float cellBorderThickness = 0.05f;
+    public Color gridColor = new Color(0.2156862745f, 0.2156862745f, 0.2156862745f);
+
+    [Header("Velocity")]
+    public Color velocityUColor = new Color(1f, 0f, 0f);
+    public Color velocityVColor = new Color(0f, 1f, 0f);
+    public float velocityPointRadius = 0.07f;
+    public float velocityArrowLengthFactor = 0.3f;
+    public float velocityArrowThickness = 0.04f;
+
+    [Header("Velocity Map")]
+    public float velocityDisplayRange = 1f;
+    public Gradient velocityColorMap;
+
+    [Header("Divergence")]
+    public bool showDivergenceValue = false;
+    public float divergenceDisplayRange = 1f;
+    public Color negativeDivergenceColor = new Color(0.3f, 0.3f, 1f, 0.7f);
+    public Color positiveDivergenceColor = new Color(1f, 0.3f, 0.3f, 0.7f);
+
+    [Header("Pressure")]
+    public bool showPressureValue = false;
+    public float pressureDisplayRange = 1f;
+    public Color negativePressureColor = new Color(0.3f, 1f, 0.3f, 0.7f);
+    public Color positivePressureColor = new Color(0.7f, 0.3f, 0.7f, 0.7f);
+
+    [Header("Smoke")]
+    public bool showSmokeValue = false;
+    public float smokeDisplayRange = 1f;
+    public Color smokeColor = new Color(1f, 1f, 1f, 0.6f);
+
+    Vector2 CellDisplaySize => Vector2.one * CellSize * (1 - cellBorderThickness);
+    public float HalfCellSize => CellSize * 0.5f;
+
+    public void OnEnable() {
+        isRenderingEnabled = true;
+    }
+
+    public void OnDisable() {
+        isRenderingEnabled = false;
+    }
+
+    public Vector2 CellCenterToWorld(int i, int j) {
+        return CellCenterToWorld((float)i, (float)j);
+    }
+    public Vector2 CellCenterToWorld(float x, float y) {
+        return new Vector2(x - (grid.width - 1) * 0.5f, y - (grid.height - 1) * 0.5f) * CellSize;
+    }
+
+    public Vector2Int WorldToCellCenter(Vector2 position) {
+        Vector2 cell = position / CellSize;
+        cell.x += (grid.width - 1) * 0.5f;
+        cell.y += (grid.height - 1) * 0.5f;
+        return Vector2Int.RoundToInt(cell);
+    }
+
+    public void SetGridToRender(FluidGridMac grid) {
+        this.grid = grid;
+    }
+
+    public void Render(Vector2 mousePosition, bool isMousePressed) {
+        if (!isRenderingEnabled)
+            return;
+
+        Draw.StartLayerIfNotInMatching(Vector2.zero, 1, false);
+
+        RenderGrid();
+        if (visualizationMode == VisualizationMode.Velocity)
+            RenderVelocities();
+
+        Draw.Point(mousePosition, inputRadius, isMousePressed ? inputActiveColor : inputColor);
+    }
+
+    void RenderGrid() {
+        for (int i = 0; i < grid.width; ++i) {
+            for (int j = 0; j < grid.height; ++j) {
+                RenderCell(i, j);
+            }
+        }
+    }
+
+    void RenderCell(int i, int j) {
+        Color col = gridColor;
+        Vector2 pos = CellCenterToWorld(i, j);
+
+        switch (grid.cellType[i, j]) {
+            case FluidGridMac.CellType.Solid:
+                col = Color.gray;
+                break;
+        }
+
+        switch (visualizationMode) {
+            case VisualizationMode.VelocityMap:
+                if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
+                    break;
+                Vector2 velocity = grid.SampleVelocity(new Vector2(i, j));
+                float velocityT = Mathf.Clamp(velocity.sqrMagnitude / velocityDisplayRange, 0, 1f);
+                col = velocityColorMap.Evaluate(velocityT);
+                break;
+            case VisualizationMode.Divergence:
+                float divergence = grid.CalculateDivergenceAtCell(i, j);
+                float divergenceT = Mathf.Abs(divergence) / divergenceDisplayRange;
+                col = Color.Lerp(col, divergence < 0 ? negativeDivergenceColor : positiveDivergenceColor, divergenceT);
+                if (showDivergenceValue)
+                    Draw.Text(FontType.JetbrainsMonoRegular, $"{divergence:0.00}", fontSize, pos, Anchor.Centre, Color.white);
+                break;
+            case VisualizationMode.Pressure:
+                float pressure = grid.pressure[i, j];
+                float pressureT = Mathf.Abs(pressure) / pressureDisplayRange;
+                col = Color.Lerp(col, pressure < 0 ? negativePressureColor : positivePressureColor, pressureT);
+                if (showPressureValue)
+                    Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, pos, Anchor.Centre, Color.white);
+                break;
+            case VisualizationMode.Smoke:
+                float smoke = grid.smokeMap[i, j];
+                float smokeT = Mathf.Clamp01(smoke / smokeDisplayRange);
+                col = Color.Lerp(col, smokeColor, smokeT);
+                if (showSmokeValue)
+                    Draw.Text(FontType.JetbrainsMonoRegular, $"{smoke:0.00}", fontSize, pos, Anchor.Centre, Color.white);
+                break;
+        }
+
+        Draw.Quad(pos, CellDisplaySize, col);
+    }
+
+    void RenderVelocities() {
+        // Render horizontal arrows
+        for (int i = 0; i <= grid.width; ++i) {
+            for (int j = 0; j < grid.height; ++j) {
+                float x = i - 0.5f;
+                float y = j;
+                float u = grid.GetVelocity(grid.velocityU, x, y, FluidGridMac.Axis.X);
+                Vector2 pos = CellCenterToWorld(x, y);
+                RenderVelocityArrow(
+                    pos,
+                    new Vector2(u, 0),
+                    velocityUColor,
+                    velocityPointRadius,
+                    velocityArrowLengthFactor,
+                    velocityArrowThickness);
+            }
+        }
+
+        // Render vertical arrows
+        for (int i = 0; i < grid.width; ++i) {
+            for (int j = 0; j <= grid.height; ++j) {
+                float x = i;
+                float y = j - 0.5f;
+                float v = grid.GetVelocity(grid.velocityV, x, y, FluidGridMac.Axis.Y);
+                Vector2 pos = CellCenterToWorld(x, y);
+                RenderVelocityArrow(
+                    pos,
+                    new Vector2(0, v),
+                    velocityVColor,
+                    velocityPointRadius,
+                    velocityArrowLengthFactor,
+                    velocityArrowThickness);
+            }
+        }
+    }
+
+    void RenderVelocityArrow(
+        Vector2 position,
+        Vector2 velocity,
+        Color color,
+        float pointRadius,
+        float arrowLengthFactor,
+        float arrowThickness) {
+        Draw.Point(position, pointRadius, color);
+        Draw.Arrow(position, position + velocity * arrowLengthFactor, arrowThickness, arrowThickness * 3.5f, 32, color);
+    }
+
+    public void CycleVisualizationMode(bool isForward) {
+        var modeCount = VisualizationMode.GetNames(typeof(VisualizationMode)).Length;
+        int direction = isForward ? -1 : 1;
+
+        int mode = (int)visualizationMode + direction;
+        if (mode < 0)
+            mode += modeCount;
+        mode %= modeCount;
+        visualizationMode = (VisualizationMode)mode;
+    }
+}
+}
