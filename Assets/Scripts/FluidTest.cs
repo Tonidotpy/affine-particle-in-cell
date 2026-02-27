@@ -31,6 +31,19 @@ public class FluidTest : MonoBehaviour {
     Vector2 mousePositionOld = Vector2.zero;
     bool shouldRunSimulationStepOnce = false;
 
+    void ShowUsage() {
+        Debug.Log(@"Controls:
+        Tab: Cycle visualization mode forward
+        Shift+Tab: Cycle visualization mode backward
+        Space: Pause/Unpause simulation
+        N: When paused run a single simulation step
+        C: Reset the simulation
+        S: Update fluid obstacles in the Grid
+        Z: Clear all the obstacles
+        MouseLeft: Add velocity
+        MouseRight: Add smoke");
+    }
+
     void Start() {
         simulationRenderer = GetComponent<FluidRenderer>();
         simulation = new FluidSimulation(width, height);
@@ -38,6 +51,8 @@ public class FluidTest : MonoBehaviour {
         simulationRenderer.SetGridToRender(simulation.Grid);
 
         Camera.main.orthographicSize = height * simulationRenderer.CellSize * 0.6f;
+
+        ShowUsage();
     }
 
     void Update() {
