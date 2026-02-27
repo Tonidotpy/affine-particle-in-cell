@@ -147,7 +147,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 418967679}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cd7ce4b5ccb3e2b31b0ec0894d3e54a8, type: 3}
+  m_Script: {fileID: 11500000, guid: b21ed07df861c6689adbf842713bcf88, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidObstacle
 --- !u!23 &418967681
@@ -250,7 +250,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 511096281}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cd7ce4b5ccb3e2b31b0ec0894d3e54a8, type: 3}
+  m_Script: {fileID: 11500000, guid: b21ed07df861c6689adbf842713bcf88, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidObstacle
 --- !u!23 &511096283
@@ -445,7 +445,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 1548918893}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cd7ce4b5ccb3e2b31b0ec0894d3e54a8, type: 3}
+  m_Script: {fileID: 11500000, guid: b21ed07df861c6689adbf842713bcf88, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidObstacle
 --- !u!23 &1548918895
@@ -562,29 +562,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1620029909}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: efaeab519314fbea2a6bb4c83171e4fb, type: 3}
+  m_Script: {fileID: 11500000, guid: 21db04e1edbf6a63992b47a0ad6047ab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidTest
-  width: 50
-  height: 30
-  solverIterations: 15
-  sor: 1.7
-  timeStepMultiplier: 1
-  isSimulationPaused: 1
-  velocityStrenght: 5
-  smokeAmount: 0.2
---- !u!114 &1620029914
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1620029909}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 97eb06a6bfe146c43bceed8faa296c19, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidRenderer
   visualizationMode: 5
   fontSize: 0.18
   inputRadius: 2
@@ -598,7 +578,7 @@ MonoBehaviour:
   velocityPointRadius: 0.07
   velocityArrowLengthFactor: 0.3
   velocityArrowThickness: 0.04
-  velocityDisplayRange: 5
+  velocityDisplayRange: 1
   velocityColorMap:
     serializedVersion: 2
     key0: {r: 0, g: 0, b: 1, a: 1}
@@ -630,16 +610,36 @@ MonoBehaviour:
     m_NumColorKeys: 5
     m_NumAlphaKeys: 2
   showDivergenceValue: 0
-  divergenceDisplayRange: 3
+  divergenceDisplayRange: 1
   negativeDivergenceColor: {r: 0.3, g: 0.3, b: 1, a: 0.7}
   positiveDivergenceColor: {r: 1, g: 0.3, b: 0.3, a: 0.7}
   showPressureValue: 0
-  pressureDisplayRange: 5
+  pressureDisplayRange: 1
   negativePressureColor: {r: 0.3, g: 1, b: 0.3, a: 0.7}
   positivePressureColor: {r: 0.7, g: 0.3, b: 0.7, a: 0.7}
   showSmokeValue: 0
   smokeDisplayRange: 1
-  smokeColor: {r: 1, g: 1, b: 1, a: 1}
+  smokeColor: {r: 1, g: 1, b: 1, a: 0.6}
+--- !u!114 &1620029914
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1620029909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b82d6dc2ba9f5749bac9d2fe0be6adb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidRenderer
+  width: 50
+  height: 35
+  solverIterations: 15
+  sor: 1.7
+  timeStepMultiplier: 1
+  isSimulationPaused: 1
+  velocityStrenght: 10
+  smokeAmount: 0.2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

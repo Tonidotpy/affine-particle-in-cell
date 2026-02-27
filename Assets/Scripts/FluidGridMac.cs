@@ -2,10 +2,28 @@ using UnityEngine;
 using static UnityEngine.Mathf;
 using System;
 
-namespace FluidSimulationRefactor {
+namespace FluidSimulation {
+/// <summary>
+/// Representation of a bidimensional Staggered Grid containing a fluid
+/// discretize into mutliple Cells.
+/// The Grid has a specific width and height, which defines the total number of Cells.
+///
+/// Each Cell is asserted to be a square of size 1 with its pressure values
+/// located at its center while the horizontal and vertical velocity components
+/// are located on the Cell edges.
+///
+/// To simplify data access the same coordinate system is used with specific
+/// functions to change reference system or map indices to coordinates whenever
+/// necessary.
+/// The coordinate system has its origin at the bottom left Cell center, the
+/// horizontal (X) coordinates increases to the right and the vertical (Y)
+/// coordinates increases to the top.
+/// The distance between two Cell centers is 1 and the distance from the center
+/// of a Cell to any of its edges is 0.5
+/// </summary>
 public class FluidGridMac {
     /// <summary>
-    /// Grid axis
+    /// Grid axis: X is horizontal, Y is vertical
     /// </summary>
     public enum Axis {
         X,
@@ -120,7 +138,7 @@ public class FluidGridMac {
     /// Set Grid boundaries as solid Cells
     /// </summary>
     void SetExternalBoundaries() {
-        // Treat border as solids
+        // Treat borders as solid
         for (int i = 0; i < width; ++i) {
             cellType[i, 0] = CellType.Solid;
             cellType[i, height - 1] = CellType.Solid;

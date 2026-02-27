@@ -1,12 +1,22 @@
 using UnityEngine;
 
-namespace FluidSimulationRefactor {
+namespace FluidSimulation {
+/// <summary>
+/// Script used to render any GameObject with a Mesh onto the fluid Grid as a
+/// solid obstacle.
+/// Works also for 3D objects but only their projection on the 2D Grid is rendered.
+/// </summary>
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 public class FluidObstacle : MonoBehaviour {
     Mesh mesh;
     MeshRenderer meshRenderer;
 
+    /// <summary>
+    /// Get the Axis-Aligned Bounding Box (AABB) of the obstacle.
+    /// The <c>meshRenderer</c> is used instead of the <c>mesh</c> bounds since
+    /// the latter is not affected by any transformation (e.g. rotation).
+    /// </summary>
     public Bounds bounds {
         get { return meshRenderer.bounds; }
     }
