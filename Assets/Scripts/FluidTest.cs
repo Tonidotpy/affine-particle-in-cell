@@ -76,6 +76,7 @@ public class FluidTest : MonoBehaviour {
         Vector2 mousePosition = InputHelper.MousePosWorld;
         isMouseLeftHeld = InputHelper.IsMouseHeld(MouseButton.Left);
         bool isMouseRightHeld = InputHelper.IsMouseHeld(MouseButton.Right);
+        float mouseScrollDelta = InputHelper.MouseScrollDelta.y;
 
         if (InputHelper.IsKeyDownThisFrame(KeyCode.Tab)) {
             simulationRenderer.CycleVisualizationMode(InputHelper.ShiftIsHeld);
@@ -129,6 +130,8 @@ public class FluidTest : MonoBehaviour {
             Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
             simulation.Grid.AddSmokeAtPosition(cellCenter, smokeAmount, simulationRenderer.inputRadius);
         }
+
+        simulationRenderer.inputRadius = Mathf.Max(0, simulationRenderer.inputRadius + mouseScrollDelta * 0.1f);
 
         mousePositionOld = mousePosition;
     }
