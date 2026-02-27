@@ -2,7 +2,7 @@ using UnityEngine;
 using static UnityEngine.Mathf;
 using System;
 
-namespace FluidSimulation {
+namespace FluidSimulationCPU {
 /// <summary>
 /// Representation of a bidimensional Staggered Grid containing a fluid
 /// discretize into mutliple Cells.

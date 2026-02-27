@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FluidSimulation {
+namespace FluidSimulationCPU {
 /// <summary>
 /// Script used to render any GameObject with a Mesh onto the fluid Grid as a
 /// solid obstacle.

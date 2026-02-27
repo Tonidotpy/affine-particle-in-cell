@@ -2,7 +2,7 @@ using UnityEngine;
 using Seb.Helpers;
 using static UnityEngine.Mathf;
 
-namespace FluidSimulation {
+namespace FluidSimulationCPU {
 /// <summary>
 /// Fluid simulation test
 /// </summary>

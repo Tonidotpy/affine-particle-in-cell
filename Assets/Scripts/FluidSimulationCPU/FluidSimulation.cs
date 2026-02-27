@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace FluidSimulation {
+namespace FluidSimulationCPU {
 /// <summary>
 /// Eulerian fluid simulation based on a staggered Grid
 /// </summary>

@@ -3,7 +3,7 @@ using Seb.Helpers;
 using Seb.Vis;
 using static UnityEngine.Mathf;
 
-namespace FluidSimulation {
+namespace FluidSimulationCPU {
 /// <summary>
 /// Render for the fluid Grid.
 /// The renderer uses Unity world coordinates as main reference system and it
