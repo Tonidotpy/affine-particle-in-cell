@@ -6,6 +6,8 @@ namespace FluidSimulationCPU {
 /// </summary>
 public class FluidSimulation {
     FluidGridMac grid;
+    float fluidDensity = 1.3f;       // kg/m^2
+    Vector2[] externalAccelerations; // m/s^2
 
     /// <summary>
     /// Simulation time step in seconds
@@ -47,18 +49,40 @@ public class FluidSimulation {
         set { solverIterations = Mathf.Max(value, 1); }
     }
 
+    /// <summary>
+    /// Density of the fluid in [kg/m^2]
+    /// </summary>
+    public float FluidDensity {
+        get { return fluidDensity; }
+        set { fluidDensity = Mathf.Max(value, 1e-9f); }
+    }
+
+    /// <summary>
+    /// Gravity acceleration applied to all the fluid
+    /// </summary>
+    public Vector2 Gravity { get; set; }
+
     public FluidSimulation(int gridWidth, int gridHeight) {
         grid = new FluidGridMac(gridWidth, gridHeight);
+
+        externalAccelerations = new Vector2[1];
     }
 
     /// <summary>
     /// Run a single step of the fluid simulation
     /// </summary>
     public void RunStep() {
-        grid.SolvePressure(solverIterations, timeStep);
-        grid.UpdateVelocities(timeStep);
+        // Advect quantities -> fluid MUST BE divergence free
         grid.AdvectVelocities(timeStep);
         grid.AdvectSmoke(timeStep);
+
+        // Add forces -> fluid has non-zero divergence
+        externalAccelerations[0] = Gravity;
+        grid.AddExternalBodyForce(externalAccelerations, timeStep);
+
+        // Remove divergence based on pressure difference -> fluid becomes divergence free again
+        grid.SolvePressure(solverIterations, timeStep);
+        grid.UpdateVelocities(timeStep);
     }
 
     /// <summary>

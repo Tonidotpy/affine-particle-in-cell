@@ -92,8 +92,6 @@ public class FluidGridMac {
         }
     }
 
-    private const float density = 1f; // g/ml
-
     public readonly int width;
     public readonly int height;
 
@@ -114,11 +112,18 @@ public class FluidGridMac {
     /// </summary>
     public float SorMultiplier { get; set; }
 
+    /// <summary>
+    /// Fluid density. Assumed constant throughout all the fluid
+    /// Density is in [kg/m^2]
+    /// </summary>
+    public float Density { get; set; }
+
     public FluidGridMac(int width, int height) {
         this.width = width;
         this.height = height;
 
         SorMultiplier = 1.7f;
+        Density = 1.3f;
 
         cellType = new CellType[width, height];
         velocityU = new float[width + 1, height];
@@ -297,7 +302,7 @@ public class FluidGridMac {
                     float pressureSum = pressureTop + pressureBottom + pressureRight + pressureLeft;
 
                     // Calculate pressure
-                    float newPressure = (pressureSum - density * info.velocityTerm) / (float)info.flowEdgeCount;
+                    float newPressure = (pressureSum - Density * info.velocityTerm) / (float)info.flowEdgeCount;
                     float oldPressure = pressure[i, j];
                     pressure[i, j] = oldPressure + (newPressure - oldPressure) * SorMultiplier;
                 } else {
@@ -312,7 +317,7 @@ public class FluidGridMac {
     /// </summary>
     /// <param name="dt">Time difference between two simulation steps in seconds</param>
     public void UpdateVelocities(float dt) {
-        float k = dt / density;
+        float k = dt / Density;
 
         // Horizontal
         for (int j = 0; j < velocityU.GetLength(1); ++j) {
@@ -348,6 +353,47 @@ public class FluidGridMac {
                     float pressureBottom = GetPressure(i, j - 1);
                     float v = GetVelocity(velocityV, x, y, Axis.Y) - k * (pressureTop - pressureBottom);
                     SetVelocity(velocityV, x, y, Axis.Y, v);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Add external forces to the entire body of fluid
+    /// </summary>
+    /// <param name="acceleration">The acceleration vectors to apply to the fluid<param>
+    /// <param name="dt">Time difference between two simulation steps in seconds</param>
+    public void AddExternalBodyForce(Vector2[] accelerations, float dt) {
+        foreach (Vector2 a in accelerations) {
+            // Horizontal
+            for (int j = 0; j < velocityU.GetLength(1); ++j) {
+                for (int i = 0; i < velocityU.GetLength(0); ++i) {
+                    float x = i - 0.5f;
+                    float y = j;
+
+                    CellType rightType = GetCellType(i, j);
+                    CellType leftType = GetCellType(i - 1, j);
+                    if (leftType == CellType.Fluid || rightType == CellType.Fluid) {
+                        float u = GetVelocity(velocityU, x, y, Axis.X);
+                        u += a.x * dt;
+                        SetVelocity(velocityU, x, y, Axis.X, u);
+                    }
+                }
+            }
+
+            // Vertical
+            for (int i = 0; i < velocityV.GetLength(0); ++i) {
+                for (int j = 0; j < velocityV.GetLength(1); ++j) {
+                    float x = i;
+                    float y = j - 0.5f;
+
+                    CellType topType = GetCellType(i, j);
+                    CellType bottomType = GetCellType(i, j - 1);
+                    if (bottomType == CellType.Fluid || topType == CellType.Fluid) {
+                        float v = GetVelocity(velocityV, x, y, Axis.Y);
+                        v += a.y * dt;
+                        SetVelocity(velocityV, x, y, Axis.Y, v);
+                    }
                 }
             }
         }

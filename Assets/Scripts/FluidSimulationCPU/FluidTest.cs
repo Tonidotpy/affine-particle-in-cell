@@ -11,12 +11,14 @@ public class FluidTest : MonoBehaviour {
     [Header("Grid Settings")]
     public int width = 5;
     public int height = 5;
+    public float fluidDensity = 1.3f; // kg/m^2
 
     [Header("Simulation Settings")]
     public int solverIterations = 1;
     public float sor = 1.7f;
     public float timeStepMultiplier = 1f;
     public bool isSimulationPaused = false;
+    public Vector2 gravity = Vector2.down * 9.81f;
 
     [Header("Velocity Settings")]
     public float velocityStrenght = 10f;
@@ -59,6 +61,8 @@ public class FluidTest : MonoBehaviour {
         simulation.SOR = sor;
         simulation.TimeStepMultiplier = timeStepMultiplier;
         simulation.SolverIterations = solverIterations;
+        simulation.FluidDensity = fluidDensity;
+        simulation.Gravity = gravity / simulationRenderer.CellSize;
 
         if (!isSimulationPaused || shouldRunSimulationStepOnce) {
             shouldRunSimulationStepOnce = false;
