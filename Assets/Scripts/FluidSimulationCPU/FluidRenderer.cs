@@ -155,7 +155,7 @@ public class FluidRenderer : MonoBehaviour {
 
         switch (grid.cellType[i, j]) {
             case FluidGridMac.CellType.Solid:
-                col = Color.gray;
+                col = Color.orange;
                 break;
         }
 
