@@ -81,6 +81,7 @@ public class FluidTest : MonoBehaviour {
         isMouseLeftHeld = InputHelper.IsMouseHeld(MouseButton.Left);
         bool isMouseRightHeld = InputHelper.IsMouseHeld(MouseButton.Right);
         float mouseScrollDelta = InputHelper.MouseScrollDelta.y;
+        float mouseInputRadius = simulationRenderer.inputRadius / simulationRenderer.CellSize;
 
         if (InputHelper.IsKeyDownThisFrame(KeyCode.Tab)) {
             simulationRenderer.CycleVisualizationMode(InputHelper.ShiftIsHeld);
@@ -107,7 +108,7 @@ public class FluidTest : MonoBehaviour {
             Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
 
             Vector2 mouseDelta = mousePosition - mousePositionOld;
-            int offset = CeilToInt(simulationRenderer.inputRadius);
+            int offset = CeilToInt(mouseInputRadius);
             for (int offy = -offset; offy <= offset; ++offy) {
                 for (int offx = -offset; offx <= offset; ++offx) {
                     int i = cellCenter.x + offx;
@@ -116,7 +117,7 @@ public class FluidTest : MonoBehaviour {
                         continue;
 
                     Vector2 cellPosition = simulationRenderer.CellCenterToWorld(i, j);
-                    float sqrRadius = simulationRenderer.inputRadius * simulationRenderer.inputRadius;
+                    float sqrRadius = mouseInputRadius * mouseInputRadius;
                     float weight = 1 - Mathf.Clamp01((cellPosition - mousePosition).sqrMagnitude / sqrRadius);
                     FluidGridMac grid = simulation.Grid;
 
@@ -132,7 +133,7 @@ public class FluidTest : MonoBehaviour {
         }
         if (isMouseRightHeld) {
             Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
-            simulation.Grid.AddSmokeAtPosition(cellCenter, smokeAmount, simulationRenderer.inputRadius);
+            simulation.Grid.AddSmokeAtPosition(cellCenter, smokeAmount, mouseInputRadius);
         }
 
         simulationRenderer.inputRadius = Mathf.Max(0, simulationRenderer.inputRadius + mouseScrollDelta * 0.1f);
