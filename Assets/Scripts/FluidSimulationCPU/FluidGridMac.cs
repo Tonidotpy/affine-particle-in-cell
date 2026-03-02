@@ -103,6 +103,8 @@ public class FluidGridMac {
     public readonly float[,] pressure;
     readonly PressureSolverData[,] pressureSolverData;
 
+    public readonly float[,] temperature;
+    public readonly float[,] temperatureNext;
     public readonly float[,] smokeMap;
     public readonly float[,] smokeMapNext;
 
@@ -118,12 +120,30 @@ public class FluidGridMac {
     /// </summary>
     public float Density { get; set; }
 
+    /// <summary>
+    /// Ambient temperature in K
+    /// </summary>
+    public float AmbientTemperature { get; set; }
+
+    /// <summary>
+    /// Buoyancy formula smoke concentration multiplier
+    /// </summary>
+    public float SmokeBuoyancyMultiplier { get; set; }
+
+    /// <summary>
+    /// Buoyancy formula temperature multiplier
+    /// </summary>
+    public float TemperatureBuoyancyMultiplier { get; set; }
+
     public FluidGridMac(int width, int height) {
         this.width = width;
         this.height = height;
 
         SorMultiplier = 1.7f;
         Density = 1.3f;
+        AmbientTemperature = 300f;
+        SmokeBuoyancyMultiplier = 0.3f;
+        TemperatureBuoyancyMultiplier = 1f;
 
         cellType = new CellType[width, height];
         velocityU = new float[width + 1, height];
@@ -133,6 +153,8 @@ public class FluidGridMac {
         pressure = new float[width, height];
         pressureSolverData = new PressureSolverData[width, height];
 
+        temperature = new float[width, height];
+        temperatureNext = new float[width, height];
         smokeMap = new float[width, height];
         smokeMapNext = new float[width, height];
 
@@ -155,6 +177,42 @@ public class FluidGridMac {
     }
 
     /// <summary>
+    /// Check if a given coordinate is within the Grid Cell centers bounds
+    /// </summary>
+    /// <param name="i">Cell coordinate on the horizontal axis</param>
+    /// <param name="j">Cell coordinate on the vertical axis</param>
+    /// <returns>True if the coordinates are within the bounds, false otherwise</returns>
+    bool IsInCellCenterBounds(int i, int j) {
+        return i >= 0 && i < width && j >= 0 && j < height;
+    }
+
+    /// <summary>
+    /// Get a value fixed at the Cell center at a given coordinate inside the Grid
+    /// If the coordinate are outside the Grid bounds the default value is returned
+    /// </summary>
+    /// <param name="grid">The array to take the values from</param>
+    /// <param name="i">Cell coordinate on the horizontal axis</param>
+    /// <param name="j">Cell coordinate on the vertical axis</param>
+    /// <param name="defaultValue">Default value to return in case of failure</param>
+    /// <returns>The value fixed at the Cell center of a given coordinate</returns>
+    public T GetCellCenterValue<T>(T[,] grid, int i, int j, T defaultValue = default) {
+        return IsInCellCenterBounds(i, j) ? grid[i, j] : defaultValue;
+    }
+
+    /// <summary>
+    /// Set a value fixed at the Cell center at a given coordinate inside the Grid
+    /// If the coordinate are outside the Grid bounds nothing happens
+    /// </summary>
+    /// <param name="grid">The array to take the values from</param>
+    /// <param name="i">Cell coordinate on the horizontal axis</param>
+    /// <param name="j">Cell coordinate on the vertical axis</param>
+    /// <param name="val">The new value to set</param>
+    public void SetCellCenterValue<T>(T[,] grid, int i, int j, T val) {
+        if (IsInCellCenterBounds(i, j))
+            grid[i, j] = val;
+    }
+
+    /// <summary>
     /// Get Cell Type given the coordinates inside the Grid
     /// If any of the coordinates are out of the bounds of the Grid <code>CellType.Solid</code> is returned
     /// </summary>
@@ -162,20 +220,42 @@ public class FluidGridMac {
     /// <param name="j">Cell coordinate on the vertical axis</param>
     /// <returns>Cell Type of the Cell at coordinate i and j</returns>
     public CellType GetCellType(int i, int j) {
-        return (i < 0 || i >= width || j < 0 || j >= height) ? CellType.Solid : cellType[i, j];
+        return GetCellCenterValue(cellType, i, j, CellType.Solid);
     }
 
     /// <summary>
-    /// Set Cell Type given the coordinates inside the Grid
-    /// Cell Type is not set if any of the coordinates are out of the bounds of the Grid
+    /// Get Cell pressure given the coordinates inside the Grid
+    /// If any of the coordinates are out of the bounds of the Grid <code>0</code> is returned
     /// </summary>
     /// <param name="i">Cell coordinate on the horizontal axis</param>
     /// <param name="j">Cell coordinate on the vertical axis</param>
-    /// <param name="type">New Cell Type to set</param>
-    public void SetCellType(int i, int j, CellType type) {
-        if (i < 0 || i >= width || j < 0 || j >= height)
-            return;
-        cellType[i, j] = type;
+    /// <returns>Pressure of the cell at coordinate i and j</returns>
+    public float GetPressure(int i, int j) {
+        return GetCellCenterValue(pressure, i, j, 0f);
+    }
+
+    /// <summary>
+    /// Get Cell temperature given the coordinates inside the Grid
+    /// If any of the coordinates are out of the bounds of the Grid the ambient
+    /// temperature is returned
+    /// </summary>
+    /// <param name="i">Cell coordinate on the horizontal axis</param>
+    /// <param name="j">Cell coordinate on the vertical axis</param>
+    /// <returns>Temperature of the cell at coordinate i and j</returns>
+    public float GetTemperature(int i, int j) {
+        return GetCellCenterValue(temperature, i, j, AmbientTemperature);
+    }
+
+    /// <summary>
+    /// Get Cell smoke concentration given the coordinates inside the Grid
+    /// If any of the coordinates are out of the bounds of the Grid <c>0</c>
+    /// is returned
+    /// </summary>
+    /// <param name="i">Cell coordinate on the horizontal axis</param>
+    /// <param name="j">Cell coordinate on the vertical axis</param>
+    /// <returns>Temperature of the cell at coordinate i and j</returns>
+    public float GetSmoke(int i, int j) {
+        return GetCellCenterValue(smokeMap, i, j, 0f);
     }
 
     /// <summary>
@@ -225,17 +305,6 @@ public class FluidGridMac {
         bool yBoundsCheck = axis == Axis.Y && (i >= 0 && i < width && j >= 0 && j < height + 1);
         if (xBoundsCheck || yBoundsCheck)
             velocity[i, j] = newVelocity;
-    }
-
-    /// <summary>
-    /// Get Cell pressure given the coordinates inside the Grid
-    /// If any of the coordinates are out of the bounds of the Grid <code>0</code> is returned
-    /// </summary>
-    /// <param name="i">Cell coordinate on the horizontal axis</param>
-    /// <param name="j">Cell coordinate on the vertical axis</param>
-    /// <returns>Pressure of the cell at coordinate i and j</returns>
-    public float GetPressure(int i, int j) {
-        return (i < 0 || i >= width || j < 0 || j >= height) ? 0f : pressure[i, j];
     }
 
     /// <summary>
@@ -400,6 +469,33 @@ public class FluidGridMac {
     }
 
     /// <summary>
+    /// Add buoyancy force to the fluid
+    /// </summary>
+    /// <param name="dt">Time difference between two simulation steps in seconds</param>
+    public void AddBuoyancyForce(float dt) {
+        // Vertical
+        for (int i = 0; i < velocityV.GetLength(0); ++i) {
+            for (int j = 0; j < velocityV.GetLength(1); ++j) {
+                float x = i;
+                float y = j - 0.5f;
+
+                CellType topType = GetCellType(i, j);
+                CellType bottomType = GetCellType(i, j - 1);
+                if (bottomType == CellType.Fluid || topType == CellType.Fluid) {
+                    float temperature = (GetTemperature(i, j) + GetTemperature(i, j - 1)) * 0.5f;
+                    float smoke = (GetSmoke(i, j) + GetSmoke(i, j - 1)) * 0.5f;
+                    float buoyancy = -SmokeBuoyancyMultiplier * smoke +
+                                     TemperatureBuoyancyMultiplier * (temperature - AmbientTemperature);
+
+                    float v = GetVelocity(velocityV, x, y, Axis.Y);
+                    v += buoyancy * dt;
+                    SetVelocity(velocityV, x, y, Axis.Y, v);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Advect velocities using the Semi-Lagrangian method
     /// In a Semi-Lagrangian method we can imagine a particle traveling at a
     /// certain velocity landing on the Cell borders.
@@ -469,24 +565,25 @@ public class FluidGridMac {
     /// <param name="position">Coordinates of the sample to take</param>
     /// <returns>The sampled velocity vector</returns>
     public Vector2 SampleVelocity(Vector2 position) {
-        float u = SampleBilinearVelocity(velocityU, position, Axis.X);
-        float v = SampleBilinearVelocity(velocityV, position, Axis.Y);
+        float u = SampleBilinearCellEdges(velocityU, position, Axis.X);
+        float v = SampleBilinearCellEdges(velocityV, position, Axis.Y);
         return new Vector2(u, v);
     }
 
     /// <summary>
-    /// Sample velocity at a given point inside the Grid using bilinear interpolation
+    /// Sample a value at a given point inside the Grid interpolating values
+    /// centered at the Cells edges
     /// </summary>
-    /// <param name="velocity">Array of velocities</param>
+    /// <param name="map">Array of values to interpolate</param>
     /// <param name="position">Coordinates of the sample to take</param>
-    /// <param name="axis">Axis of the staggered grid to consider</param>
-    /// <returns>The sampled velocity on a given axis</returns>
-    public float SampleBilinearVelocity(float[,] velocity, Vector2 position, Axis axis) {
+    /// <param name="axis">Grid axis to consider for the interpolation</param>
+    /// <returns>The sampled value</returns>
+    public float SampleBilinearCellEdges(float[,] map, Vector2 position, Axis axis) {
         float xOff = axis == Axis.X ? 0.5f : 0;
         float yOff = axis == Axis.Y ? 0.5f : 0;
 
-        int w = velocity.GetLength(0);
-        int h = velocity.GetLength(1);
+        int w = map.GetLength(0);
+        int h = map.GetLength(1);
         float x = Mathf.Clamp(position.x, 0, w - 2);
         float y = Mathf.Clamp(position.y, 0, h - 2);
 
@@ -495,42 +592,43 @@ public class FluidGridMac {
         float right = left + 1f;
         float top = bottom + 1f;
 
-        // Get velocities on the four edges
-        float ltVelocity = GetVelocity(velocity, left, top, axis);
-        float rtVelocity = GetVelocity(velocity, right, top, axis);
-        float lbVelocity = GetVelocity(velocity, left, bottom, axis);
-        float rbVelocity = GetVelocity(velocity, right, bottom, axis);
+        // Get values on the four edges
+        float lt = GetVelocity(map, left, top, axis);
+        float rt = GetVelocity(map, right, top, axis);
+        float lb = GetVelocity(map, left, bottom, axis);
+        float rb = GetVelocity(map, right, bottom, axis);
 
         // Calculate how far [0,1] the input point is along the current cell
         float xFrac = Clamp01(x - left);
         float yFrac = Clamp01(y - bottom);
-        return Blerp(lbVelocity, rbVelocity, ltVelocity, rtVelocity, xFrac, yFrac);
+        return Blerp(lb, rb, lt, rt, xFrac, yFrac);
     }
 
     /// <summary>
-    /// Sample smoke at a given point inside the Grid using bilinear interpolation
+    /// Sample a value at a given point inside the Grid interpolating values
+    /// centered at the Cells center
     /// </summary>
-    /// <param name="smoke">Array of smoke values</param>
+    /// <param name="map">Array of values to interpolate</param>
     /// <param name="position">Coordinates of the sample to take</param>
-    /// <returns>The sampled smoke value</returns>
-    public float SampleBilinearSmoke(float[,] smoke, Vector2 position) {
-        int w = smoke.GetLength(0);
-        int h = smoke.GetLength(1);
+    /// <returns>The sampled value</returns>
+    public float SampleBilinearCellCenter(float[,] map, Vector2 position) {
+        int w = map.GetLength(0);
+        int h = map.GetLength(1);
         int left = Mathf.Clamp((int)position.x, 0, w - 2);
         int bottom = Mathf.Clamp((int)position.y, 0, h - 2);
         int right = left + 1;
         int top = bottom + 1;
 
-        // Get smoke values of the adjacent Cells
-        float ltSmoke = smokeMap[left, top];
-        float rtSmoke = smokeMap[right, top];
-        float lbSmoke = smokeMap[left, bottom];
-        float rbSmoke = smokeMap[right, bottom];
+        // Get values of the adjacent Cells
+        float lt = map[left, top];
+        float rt = map[right, top];
+        float lb = map[left, bottom];
+        float rb = map[right, bottom];
 
         // Calculate how far [0,1] the input point is along the current cell
         float xFrac = Clamp01(position.x - left);
         float yFrac = Clamp01(position.y - bottom);
-        return Blerp(lbSmoke, rbSmoke, ltSmoke, rtSmoke, xFrac, yFrac);
+        return Blerp(lb, rb, lt, rt, xFrac, yFrac);
     }
 
     /// <summary>
@@ -551,6 +649,28 @@ public class FluidGridMac {
     }
 
     /// <summary>
+    /// Advect temperature using the Semi-Lagrangian method
+    /// In a Semi-Lagrangian method we can imagine a particle traveling at a
+    /// certain velocity landing on the Cell center.
+    /// Since we know the final position and velocity of the "virtual particle"
+    /// via interpolation we can calculate its previous position given the
+    /// simulation time step
+    /// </summary>
+    /// <param name="dt">Time difference between two simulation steps in seconds</param>
+    public void AdvectTemperature(float dt) {
+        for (int i = 0; i < width; ++i) {
+            for (int j = 0; j < height; ++j) {
+                Vector2 position = new Vector2(i, j);
+                Vector2 velocity = SampleVelocity(position);
+                Vector2 positionPrev = position - velocity * dt;
+                temperatureNext[i, j] = SampleBilinearCellCenter(temperature, positionPrev);
+            }
+        }
+
+        Array.Copy(temperatureNext, temperature, temperature.Length);
+    }
+
+    /// <summary>
     /// Advect smoke using the Semi-Lagrangian method
     /// In a Semi-Lagrangian method we can imagine a particle traveling at a
     /// certain velocity landing on the Cell center.
@@ -565,7 +685,7 @@ public class FluidGridMac {
                 Vector2 position = new Vector2(i, j);
                 Vector2 velocity = SampleVelocity(position);
                 Vector2 positionPrev = position - velocity * dt;
-                smokeMapNext[i, j] = SampleBilinearSmoke(smokeMap, positionPrev);
+                smokeMapNext[i, j] = SampleBilinearCellCenter(smokeMap, positionPrev);
             }
         }
 
@@ -618,6 +738,15 @@ public class FluidGridMac {
     /// </summary>
     public void ClearSmoke() {
         Array.Clear(smokeMap, 0, smokeMap.Length);
+    }
+
+    /// <summary>
+    /// Clear all temperature values setting them to the ambient temperature
+    /// </summary>
+    public void ClearTemperature() {
+        for (int i = 0; i < temperature.GetLength(0); ++i)
+            for (int j = 0; j < temperature.GetLength(1); ++j)
+                temperature[i, j] = AmbientTemperature;
     }
 
     /// <summary>

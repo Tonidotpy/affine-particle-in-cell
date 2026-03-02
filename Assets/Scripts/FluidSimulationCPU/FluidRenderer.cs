@@ -20,6 +20,7 @@ public class FluidRenderer : MonoBehaviour {
         VelocityMap,
         Divergence,
         Pressure,
+        Temperature,
         Smoke,
     }
 
@@ -63,6 +64,12 @@ public class FluidRenderer : MonoBehaviour {
     public float pressureDisplayRange = 1f;
     public Color negativePressureColor = new Color(0.3f, 1f, 0.3f, 0.7f);
     public Color positivePressureColor = new Color(0.7f, 0.3f, 0.7f, 0.7f);
+
+    [Header("Temperature")]
+    public bool showTemperatureValue = false;
+    public float temperatureDisplayRange = 1f;
+    public Color coldTemperatureColor = new Color(0.3f, 0.3f, 1f, 0.7f);
+    public Color hotTemperatureColor = new Color(1f, 0.3f, 0.3f, 0.7f);
 
     [Header("Smoke")]
     public bool showSmokeValue = false;
@@ -131,6 +138,9 @@ public class FluidRenderer : MonoBehaviour {
             RenderVelocities();
 
         Draw.Point(mousePosition, inputRadius, isMousePressed ? inputActiveColor : inputColor);
+
+        Draw.StartLayerIfNotInMatching(Vector2.zero, 1, true);
+        Draw.Text(FontType.JetbrainsMonoRegular, $"Mode: {visualizationMode}", 20f, new Vector2(30f, Screen.height - 20f), Anchor.TopLeft, Color.white);
     }
 
     /// <summary>
@@ -181,7 +191,18 @@ public class FluidRenderer : MonoBehaviour {
                 if (showPressureValue)
                     Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, pos, Anchor.Centre, Color.white);
                 break;
+            case VisualizationMode.Temperature:
+                if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
+                    break;
+                float temperatureDegrees = grid.temperature[i, j] - 273.15f;
+                float temperatureT = Mathf.Abs(temperatureDegrees) / temperatureDisplayRange;
+                col = Color.Lerp(col, temperatureDegrees < 0 ? coldTemperatureColor : hotTemperatureColor, temperatureT);
+                if (showTemperatureValue)
+                    Draw.Text(FontType.JetbrainsMonoRegular, $"{temperatureDegrees:0.00}", fontSize, pos, Anchor.Centre, Color.white);
+                break;
             case VisualizationMode.Smoke:
+                if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
+                    break;
                 float smoke = grid.smokeMap[i, j];
                 float smokeT = Mathf.Clamp01(smoke / smokeDisplayRange);
                 col = Color.Lerp(col, smokeColor, smokeT);

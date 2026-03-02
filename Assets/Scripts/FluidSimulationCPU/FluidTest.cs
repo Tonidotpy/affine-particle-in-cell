@@ -18,13 +18,16 @@ public class FluidTest : MonoBehaviour {
     public float sor = 1.7f;
     public float timeStepMultiplier = 1f;
     public bool isSimulationPaused = false;
-    public Vector2 gravity = Vector2.down * 9.81f;
+    public Vector2 gravity = Vector2.down * 9.81f; // m/s^2
+    public float ambientTemperature = 25f;         // °C
 
     [Header("Velocity Settings")]
     public float velocityStrenght = 10f;
 
     [Header("Smoke Settings")]
     public float smokeAmount = 0.2f;
+    public float smokeBuoyancyMultiplier = 1f;
+    public float temperatureBuoyancyMultiplier = 1f;
 
     FluidSimulation simulation;
     FluidRenderer simulationRenderer;
@@ -63,6 +66,9 @@ public class FluidTest : MonoBehaviour {
         simulation.SolverIterations = solverIterations;
         simulation.FluidDensity = fluidDensity;
         simulation.Gravity = gravity / simulationRenderer.CellSize;
+        simulation.AmbientTemperature = ambientTemperature;
+        simulation.SmokeBuoyancyMultiplier = smokeBuoyancyMultiplier;
+        simulation.TemperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
 
         if (!isSimulationPaused || shouldRunSimulationStepOnce) {
             shouldRunSimulationStepOnce = false;
@@ -158,7 +164,7 @@ public class FluidTest : MonoBehaviour {
                 for (int j = lbCellCenter.y; j <= rtCellCenter.y; ++j) {
                     Vector2 pos = simulationRenderer.CellCenterToWorld(i, j);
                     if (obstacle.Contains(pos))
-                        grid.SetCellType(i, j, FluidGridMac.CellType.Solid);
+                        grid.SetCellCenterValue(grid.cellType, i, j, FluidGridMac.CellType.Solid);
                 }
             }
         }

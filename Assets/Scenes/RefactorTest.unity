@@ -565,14 +565,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21db04e1edbf6a63992b47a0ad6047ab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidTest
-  visualizationMode: 5
+  visualizationMode: 6
   fontSize: 0.18
   inputRadius: 2
   inputColor: {r: 1, g: 1, b: 1, a: 0.3}
   inputActiveColor: {r: 0, g: 1, b: 0.1, a: 0.3}
   CellSize: 1
   cellBorderThickness: 0
-  gridColor: {r: 0.21568628, g: 0.21568628, b: 0.21568628, a: 1}
+  gridColor: {r: 0.21568628, g: 0.21568628, b: 0.21568628, a: 0.39215687}
   velocityUColor: {r: 1, g: 0, b: 0, a: 1}
   velocityVColor: {r: 0, g: 1, b: 0, a: 1}
   velocityPointRadius: 0.07
@@ -617,9 +617,13 @@ MonoBehaviour:
   pressureDisplayRange: 1
   negativePressureColor: {r: 0.3, g: 1, b: 0.3, a: 0.7}
   positivePressureColor: {r: 0.7, g: 0.3, b: 0.7, a: 0.7}
+  showTemperatureValue: 0
+  temperatureDisplayRange: 50
+  coldTemperatureColor: {r: 0.3, g: 0.3, b: 1, a: 0.7}
+  hotTemperatureColor: {r: 1, g: 0.3, b: 0.3, a: 0.7}
   showSmokeValue: 0
   smokeDisplayRange: 1
-  smokeColor: {r: 1, g: 1, b: 1, a: 1}
+  smokeColor: {r: 0.8867924, g: 0.8867924, b: 0.8867924, a: 1}
 --- !u!114 &1620029914
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -640,8 +644,11 @@ MonoBehaviour:
   timeStepMultiplier: 1
   isSimulationPaused: 1
   gravity: {x: 0, y: -9.81}
+  ambientTemperature: 21
   velocityStrenght: 10
   smokeAmount: 0.2
+  smokeBuoyancyMultiplier: 0.3
+  temperatureBuoyancyMultiplier: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

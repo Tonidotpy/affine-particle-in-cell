@@ -7,7 +7,10 @@ namespace FluidSimulationCPU {
 public class FluidSimulation {
     FluidGridMac grid;
     float fluidDensity = 1.3f;       // kg/m^2
+    float ambientTemperature = 300f; // K
     Vector2[] externalAccelerations; // m/s^2
+    float smokeBuoyancyMultiplier = 1f;
+    float temperatureBuoyancyMultiplier = 1f;
 
     /// <summary>
     /// Simulation time step in seconds
@@ -58,12 +61,42 @@ public class FluidSimulation {
     }
 
     /// <summary>
+    /// Ambient temperature in °C
+    /// </summary>
+    public float AmbientTemperature {
+        get { return ambientTemperature - 273.15f; }
+        set { ambientTemperature = Mathf.Max(value + 273.15f, 0); }
+    }
+
+    /// <summary>
+    /// Buoyancy formula smoke concentration multiplier
+    /// </summary>
+    public float SmokeBuoyancyMultiplier {
+        get { return smokeBuoyancyMultiplier; }
+        set { smokeBuoyancyMultiplier = Mathf.Max(value, 0); }
+    }
+
+    /// <summary>
+    /// Buoyancy formula temperature multiplier
+    /// </summary>
+    public float TemperatureBuoyancyMultiplier {
+        get { return temperatureBuoyancyMultiplier; }
+        set { temperatureBuoyancyMultiplier = Mathf.Max(value, 0); }
+    }
+
+    /// <summary>
     /// Gravity acceleration applied to all the fluid
     /// </summary>
     public Vector2 Gravity { get; set; }
 
     public FluidSimulation(int gridWidth, int gridHeight) {
         grid = new FluidGridMac(gridWidth, gridHeight);
+
+        for (int i = 0; i < gridWidth; ++i) {
+            for (int j = 0; j < gridHeight; ++j) {
+                grid.temperature[i, j] = ambientTemperature;
+            }
+        }
 
         externalAccelerations = new Vector2[1];
     }
@@ -72,17 +105,31 @@ public class FluidSimulation {
     /// Run a single step of the fluid simulation
     /// </summary>
     public void RunStep() {
+        UpdateGridParameters();
+
         // Advect quantities -> fluid MUST BE divergence free
         grid.AdvectVelocities(timeStep);
+        grid.AdvectTemperature(timeStep);
         grid.AdvectSmoke(timeStep);
 
-        // Add forces -> fluid has non-zero divergence
-        externalAccelerations[0] = Gravity;
-        grid.AddExternalBodyForce(externalAccelerations, timeStep);
+        // Add buoyancy forces -> fluid has non-zero divergence
+        grid.AddBuoyancyForce(timeStep);
+
+        // Add forces -> fluid has non-zero divergence (replaced by buoyancy)
+        // externalAccelerations[0] = Gravity;
+        // grid.AddExternalBodyForce(externalAccelerations, timeStep);
 
         // Remove divergence based on pressure difference -> fluid becomes divergence free again
         grid.SolvePressure(solverIterations, timeStep);
         grid.UpdateVelocities(timeStep);
+    }
+
+    void UpdateGridParameters() {
+        grid.Density = fluidDensity;
+        grid.AmbientTemperature = ambientTemperature;
+        grid.AmbientTemperature = ambientTemperature;
+        grid.SmokeBuoyancyMultiplier = smokeBuoyancyMultiplier;
+        grid.TemperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
     }
 
     /// <summary>
@@ -92,6 +139,7 @@ public class FluidSimulation {
         grid.ClearVelocities();
         grid.ClearPressure();
         grid.ClearSmoke();
+        grid.ClearTemperature();
     }
 }
 }
