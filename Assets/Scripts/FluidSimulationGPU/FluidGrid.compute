@@ -1,0 +1,134 @@
+#pragma kernel PreparePressureSolver
+#pragma kernel RunPressureSolver
+
+// --- Constants --- //
+static const uint FLOW_LEFT_BIT_POS = 0;
+static const uint FLOW_RIGHT_BIT_POS = 1;
+static const uint FLOW_BOTTOM_BIT_POS = 2;
+static const uint FLOW_TOP_BIT_POS = 3;
+static const uint FLOW_COUNT_BIT_POS = 4;
+
+static const uint CELL_TYPE_SOLID = 0;
+static const uint CELL_TYPE_FLUID = 1;
+
+static const uint AXIS_X = 0;
+static const uint AXIS_Y = 1;
+
+// --- Settings --- //
+const uint2 resolution;
+const float dt; // s
+const float density; // kg/m^2
+const float sor;
+const uint solverPassIndex;
+
+// --- Textures --- //
+RWTexture2D<uint> cellType;
+RWTexture2D<float2> velocityMap;
+RWTexture2D<float2> velocityMapAdvected;
+RWTexture2D<float> pressureMap;
+RWTexture2D<float2> pressureSolverData;
+RWTexture2D<float> temperatureMap;
+RWTexture2D<float> smokeMap;
+
+// --- Utilities --- //
+bool IsInCellCenterBounds(uint i, uint j) {
+    return i >= 0 && i < resolution.x && j >= 0 && j < resolution.y;
+}
+
+float GetCellCenterValue(RWTexture2D<float> grid, uint i, uint j, float defaultValue) {
+    return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue;
+}
+
+float GetPressure(uint i, uint j) {
+    return GetCellCenterValue(pressureMap, i, j, 0);
+}
+
+float GetVelocity(RWTexture2D<float2> velocity, float x, float y, uint axis) {
+    float xOff = axis == AXIS_X ? 0.5 : 0;
+    float yOff = axis == AXIS_Y ? 0.5 : 0;
+    int w = resolution.x;
+    int h = resolution.y;
+    int i = round(x + xOff);
+    int j = round(y + yOff);
+
+    bool xBoundsCheck = axis == AXIS_X && (i >= 0 && i < w + 1 && j >= 0 && j < h);
+    bool yBoundsCheck = axis == AXIS_Y && (i >= 0 && i < w && j >= 0 && j < h + 1);
+    if (!xBoundsCheck && !yBoundsCheck)
+        return 0;
+    return axis == AXIS_X ? velocity[uint2(i, j)].x : velocity[uint2(i, j)].y;
+}
+
+uint2 GetCheckerboardCellCoordinates(uint index, uint passIndex, uint2 resolution) {
+    uint i = index * 2 + passIndex;
+    uint row = i / resolution.x;
+    uint col = i % resolution.x;
+
+    // If the Grid width is even offset column to preserve
+    // the checkerboard pattern
+    uint isWidthEven = resolution.x % 2 == 0 && row % 2 == 1;
+
+    // 'col' assumed to be always positive since if the 'passIndex' is 1 the
+    // minimum possible value of 'col' is 1 thus becoming 0 only if the Grid
+    // width is even
+    col += isWidthEven * (1 - passIndex * 2);
+    return uint2(row, col);
+}
+
+// --- Kernels --- //
+[numthreads(8,8,1)]
+void PreparePressureSolver(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+
+    bool isSolid = cellType[id.xy] != CELL_TYPE_FLUID;
+    uint flowTop = 1 - (isSolid | (cellType[uint2(id.x, id.y + 1)] != CELL_TYPE_FLUID));
+    uint flowBottom = 1 - (isSolid | (cellType[uint2(id.x, id.y - 1)] != CELL_TYPE_FLUID));
+    uint flowRight= 1 - (isSolid | (cellType[uint2(id.x + 1, id.y)] != CELL_TYPE_FLUID));
+    uint flowLeft = 1 - (isSolid | (cellType[uint2(id.x - 1, id.y)] != CELL_TYPE_FLUID));
+    uint flowEdgeCount = flowTop + flowBottom + flowRight + flowLeft;
+    uint flow = (flowBottom << FLOW_BOTTOM_BIT_POS) |
+        (flowTop << FLOW_TOP_BIT_POS) |
+        (flowLeft << FLOW_LEFT_BIT_POS) |
+        (flowRight << FLOW_RIGHT_BIT_POS) |
+        (flowEdgeCount << FLOW_COUNT_BIT_POS);
+
+    float velocityTop = GetVelocity(velocityMap, id.x, id.y + 0.5, AXIS_Y);
+    float velocityBottom = GetVelocity(velocityMap, id.x, id.y - 0.5, AXIS_Y);
+    float velocityRight = GetVelocity(velocityMap, id.x + 0.5, id.y, AXIS_X);
+    float velocityLeft = GetVelocity(velocityMap, id.x - 0.5, id.y, AXIS_X);
+    float k = density / dt;
+    float velocityTerm = (flowEdgeCount == 0) ?
+        0 :
+        (velocityTop - velocityBottom + velocityRight - velocityLeft) / k;
+
+    pressureSolverData[id.xy] = float2(flow, velocityTerm);
+}
+
+[numthreads(64,1,1)]
+void RunPressureSolver(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= (resolution.x * resolution.y / 2)) return;
+
+    uint2 cell = GetCheckerboardCellCoordinates(id.x, solverPassIndex, resolution);
+
+    uint flow = (uint)pressureSolverData[cell].x;
+    uint flowTop = (flow >> FLOW_TOP_BIT_POS) & 1;
+    uint flowBottom = (flow >> FLOW_BOTTOM_BIT_POS) & 1;
+    uint flowRight = (flow >> FLOW_RIGHT_BIT_POS) & 1;
+    uint flowLeft = (flow >> FLOW_LEFT_BIT_POS) & 1;
+    uint flowEdgeCount = (flow >> FLOW_COUNT_BIT_POS);
+    float velocityTerm = pressureSolverData[cell].y;
+
+    if (flowEdgeCount == 0) {
+        pressureMap[cell] = 0;
+        return;
+    }
+
+    float pressureTop = GetPressure(cell.x, cell.y + 1) * flowTop;
+    float pressureBottom = GetPressure(cell.x, cell.y - 1) * flowBottom;
+    float pressureRight = GetPressure(cell.x + 1, cell.y) * flowRight;
+    float pressureLeft = GetPressure(cell.x - 1, cell.y) * flowLeft;
+    float pressureSum = pressureTop + pressureBottom + pressureRight + pressureLeft;
+
+    float newPressure = (pressureSum - velocityTerm) / (float)flowEdgeCount;
+    float oldPressure = pressureMap[cell];
+    pressureMap[cell] = oldPressure + (newPressure - oldPressure) * sor;
+}
