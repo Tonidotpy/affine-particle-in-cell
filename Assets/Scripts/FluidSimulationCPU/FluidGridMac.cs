@@ -329,10 +329,11 @@ public class FluidGridMac {
     void PreparePressureSolver(float dt) {
         for (int i = 0; i < width; ++i) {
             for (int j = 0; j < height; ++j) {
-                uint flowTop = GetCellType(i, j + 1) != CellType.Fluid ? 0U : 1U;
-                uint flowBottom = GetCellType(i, j - 1) != CellType.Fluid ? 0U : 1U;
-                uint flowRight = GetCellType(i + 1, j) != CellType.Fluid ? 0U : 1U;
-                uint flowLeft = GetCellType(i - 1, j) != CellType.Fluid ? 0U : 1U;
+                bool isSolid = GetCellType(i, j) != CellType.Fluid;
+                uint flowTop = isSolid || GetCellType(i, j + 1) != CellType.Fluid ? 0U : 1U;
+                uint flowBottom = isSolid || GetCellType(i, j - 1) != CellType.Fluid ? 0U : 1U;
+                uint flowRight = isSolid || GetCellType(i + 1, j) != CellType.Fluid ? 0U : 1U;
+                uint flowLeft = isSolid || GetCellType(i - 1, j) != CellType.Fluid ? 0U : 1U;
                 uint flowEdgeCount = flowTop + flowBottom + flowRight + flowLeft;
 
                 float velocityTop = GetVelocity(velocityV, i, j + 0.5f, Axis.Y);
