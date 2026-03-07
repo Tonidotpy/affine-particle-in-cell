@@ -1,8 +1,10 @@
 using UnityEngine;
 
 namespace FluidSimulationGPU {
+[RequireComponent(typeof(FluidRendererManager))]
 public class Test : MonoBehaviour {
     FluidGridManager grid;
+    FluidRendererManager fluidRenderer;
 
     public ComputeShader compute;
     public Vector2Int resolution = new(50, 50);
@@ -16,6 +18,10 @@ public class Test : MonoBehaviour {
 
     public void Start() {
         grid = new FluidGridManager(resolution.x, resolution.y, compute);
+        fluidRenderer = GetComponent<FluidRendererManager>();
+        fluidRenderer.SetGridToRender(grid);
+
+        Camera.main.orthographicSize = resolution.y * fluidRenderer.cellSize * 0.6f;
     }
 
     public void Update() {

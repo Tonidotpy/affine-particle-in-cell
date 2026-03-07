@@ -7,8 +7,27 @@ using static UnityEngine.Mathf;
 namespace FluidSimulationGPU {
 public class FluidGridManager {
     enum ComputeKernel {
+        Init,
         PreparePressureSolver,
         RunPressureSolver,
+    }
+
+    /// <summary>
+    /// Data needed to solve the pressure equation using the Gauss-Seidel method
+    /// </summary>
+    public struct PressureSolverData {
+        // flowData is made out of multiple variables compressed into a single
+        // integer for optimization purposes
+        //
+        // The format is the following:
+        //     [31     ] - flowTop: 0 if there is no flow from the top cell 1 otherwise
+        //     [30     ] - flowBottom: 0 if there is no flow from the bottom cell 1 otherwise
+        //     [29     ] - flowRight: 0 if there is no flow from the right cell 1 otherwise
+        //     [28     ] - flowLeft: 0 if there is no flow from the top cell 1 otherwise
+        //     [27 -  8] - Reserved
+        //     [ 7 -  0] - flowEdgeCount: number of edges with flows different from 0
+        public uint flowData;
+        public float velocityTerm;
     }
 
     ComputeShader compute;
@@ -22,17 +41,21 @@ public class FluidGridManager {
     public float smokeBuoyancyMultiplier = 0.3f;
     public float temperatureBuoyancyMultiplier = 1f;
 
-    RenderTexture cellType;
-    RenderTexture velocityMap;
-    RenderTexture velocityMapAdvected;
-    RenderTexture pressureMap;
-    RenderTexture pressureSolverData;
-    RenderTexture temperatureMap;
-    RenderTexture smokeMap;
+    public RenderTexture debugMap;
+    public RenderTexture cellType;
+    public RenderTexture velocityMap;
+    public RenderTexture velocityMapAdvected;
+    public RenderTexture pressureMap;
+    public ComputeBuffer pressureSolverData;
+    public RenderTexture temperatureMap;
+    public RenderTexture smokeMap;
 
     public FluidGridManager(int width, int height, ComputeShader compute) {
         resolution = new(width, height);
         this.compute = compute;
+
+        Setup();
+        ComputeHelper.Dispatch(compute, width, height, ComputeKernel.Init);
     }
 
     public void Setup() {
@@ -42,21 +65,23 @@ public class FluidGridManager {
     }
 
     void CreateTextures() {
+        ComputeHelper.CreateRenderTexture(ref debugMap, resolution.x, resolution.y, FilterMode.Point, GraphicsFormat.R32G32B32A32_SFloat);
         ComputeHelper.CreateRenderTexture(ref cellType, resolution.x, resolution.y, FilterMode.Point, GraphicsFormat.R8_UInt);
         ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref pressureMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32_SFloat);
-        ComputeHelper.CreateRenderTexture(ref pressureSolverData, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
+        ComputeHelper.CreateStructuredBuffer<PressureSolverData>(ref pressureSolverData, resolution.x * resolution.y);
         ComputeHelper.CreateRenderTexture(ref temperatureMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32_SFloat);
         ComputeHelper.CreateRenderTexture(ref smokeMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32_SFloat);
     }
 
     void BindTextures() {
+        ComputeHelper.SetTexture(compute, debugMap, "debugMap", computeKernels);
         ComputeHelper.SetTexture(compute, cellType, "cellType", computeKernels);
         ComputeHelper.SetTexture(compute, velocityMap, "velocityMap", computeKernels);
         ComputeHelper.SetTexture(compute, velocityMapAdvected, "velocityMapAdvected", computeKernels);
         ComputeHelper.SetTexture(compute, pressureMap, "pressureMap", computeKernels);
-        ComputeHelper.SetTexture(compute, pressureSolverData, "pressureSolverData", computeKernels);
+        ComputeHelper.SetBuffer(compute, pressureSolverData, "pressureSolverData", computeKernels);
         ComputeHelper.SetTexture(compute, temperatureMap, "temperatureMap", computeKernels);
         ComputeHelper.SetTexture(compute, smokeMap, "smokeMap", computeKernels);
     }
@@ -79,18 +104,19 @@ public class FluidGridManager {
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.PreparePressureSolver);
 
         for (int i = 0; i < iterations; ++i) {
-            compute.SetFloat("solverPassIndex", i);
-            ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.RunPressureSolver);
+            compute.SetFloat("solverPassIndex", i % 2);
+            ComputeHelper.Dispatch(compute, resolution.x * resolution.y / 2, ComputeKernel.RunPressureSolver);
         }
     }
 
     public void ReleaseTextures() {
+        ComputeHelper.Release(pressureSolverData);
         ComputeHelper.Release(
+            debugMap,
             cellType,
             velocityMap,
             velocityMapAdvected,
             pressureMap,
-            pressureSolverData,
             temperatureMap,
             smokeMap);
     }
