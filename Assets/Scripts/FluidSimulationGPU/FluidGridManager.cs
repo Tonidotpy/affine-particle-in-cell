@@ -10,6 +10,7 @@ public class FluidGridManager {
         Init,
         PreparePressureSolver,
         RunPressureSolver,
+        UpdateVelocities,
     }
 
     /// <summary>
@@ -67,8 +68,8 @@ public class FluidGridManager {
     void CreateTextures() {
         ComputeHelper.CreateRenderTexture(ref debugMap, resolution.x, resolution.y, FilterMode.Point, GraphicsFormat.R32G32B32A32_SFloat);
         ComputeHelper.CreateRenderTexture(ref cellType, resolution.x, resolution.y, FilterMode.Point, GraphicsFormat.R8_UInt);
-        ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
-        ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x + 1, resolution.y + 1, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x + 1, resolution.y + 1, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref pressureMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32_SFloat);
         ComputeHelper.CreateStructuredBuffer<PressureSolverData>(ref pressureSolverData, resolution.x * resolution.y);
         ComputeHelper.CreateRenderTexture(ref temperatureMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32_SFloat);
@@ -102,11 +103,16 @@ public class FluidGridManager {
         compute.SetFloat("sor", sorMultiplier);
 
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.PreparePressureSolver);
-
         for (int i = 0; i < iterations; ++i) {
             compute.SetFloat("solverPassIndex", i % 2);
             ComputeHelper.Dispatch(compute, resolution.x * resolution.y / 2, ComputeKernel.RunPressureSolver);
         }
+    }
+
+    public void UpdateVelocities(float dt) {
+        compute.SetFloat("dt", dt);
+        compute.SetFloat("density", density);
+        ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.UpdateVelocities);
     }
 
     public void ReleaseTextures() {

@@ -11,6 +11,18 @@ Shader "Unlit/FluidRenderer" {
 
             #include "UnityCG.cginc"
 
+            // Velocity channels
+            #define VELOCITY_CHANNEL_X (0)
+            #define VELOCITY_CHANNEL_Y (1)
+            #define VELOCITY_CHANNEL_BOTH (2)
+
+            // Visualization modes
+            #define VISUALIZATION_MODE_DEBUG (0)
+            #define VISUALIZATION_MODE_VELOCITY (1)
+            #define VISUALIZATION_MODE_DIVERGENCE (2)
+            #define VISUALIZATION_MODE_PRESSURE (3)
+
+
             struct appdata {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
@@ -25,6 +37,17 @@ Shader "Unlit/FluidRenderer" {
             int visualizationMode;
             sampler2D debugMap;
 
+            // Velocity
+            sampler2D velocityMap;
+            float velocityDisplayRange;
+            int velocityChannel;
+
+            // Divergence
+            float divergenceDisplayRange;
+            fixed4 negativeDivergenceColor;
+            fixed4 positiveDivergenceColor;
+
+            // Pressure
             sampler2D pressureMap;
             float pressureDisplayRange;
             fixed4 negativePressureColor;
@@ -43,6 +66,28 @@ Shader "Unlit/FluidRenderer" {
                 return col;
             }
 
+            fixed4 RenderVelocity(v2f i) {
+                float2 velocity = tex2D(velocityMap, i.uv).rg;
+                fixed4 col = fixed4(0, 0, 0, 1);
+                if (velocityChannel == VELOCITY_CHANNEL_X || velocityChannel == VELOCITY_CHANNEL_BOTH)
+                    col.r = velocity.x * abs(velocity.x * velocityDisplayRange);
+                if (velocityChannel == VELOCITY_CHANNEL_Y || velocityChannel == VELOCITY_CHANNEL_BOTH)
+                    col.g = velocity.y * abs(velocity.y * velocityDisplayRange);
+                return col;
+            }
+
+            fixed4 RenderDivergence(v2f i) {
+                float2 sample = tex2D(velocityMap, i.uv).rg;
+                float velocityBottom = sample.y;
+                float velocityLeft = sample.x;
+                float velocityTop = tex2D(velocityMap, float2(i.uv.x, i.uv.y + 1));
+                float velocityRight = tex2D(velocityMap, float2(i.uv.x + 1, i.uv.y));
+                float divergence = (velocityTop - velocityBottom) + (velocityRight - velocityLeft);
+
+                fixed4 col = divergence < 0 ? negativeDivergenceColor : positiveDivergenceColor;
+                return fixed4(col.rgb * abs(divergence * divergenceDisplayRange), col.a);
+            }
+
             fixed4 RenderPressure(v2f i) {
                 float pressure = tex2D(pressureMap, i.uv).r;
                 fixed4 col = pressure < 0 ? negativePressureColor : positivePressureColor;
@@ -50,12 +95,11 @@ Shader "Unlit/FluidRenderer" {
             }
 
             fixed4 frag (v2f i) : SV_Target {
-                const int VISUALIZATION_MODE_DEBUG = 0;
-                const int VISUALIZATION_MODE_PRESSURE = 1;
-
                 fixed4 col = fixed4(1, 0, 1, 1);
 
                 if (visualizationMode == VISUALIZATION_MODE_DEBUG) col = RenderDebug(i);
+                else if (visualizationMode == VISUALIZATION_MODE_VELOCITY) col = RenderVelocity(i);
+                else if (visualizationMode == VISUALIZATION_MODE_DIVERGENCE) col = RenderDivergence(i);
                 else if (visualizationMode == VISUALIZATION_MODE_PRESSURE) col = RenderPressure(i);
 
                 return col;

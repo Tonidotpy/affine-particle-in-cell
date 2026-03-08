@@ -11,7 +11,18 @@ public class FluidRendererManager : MonoBehaviour {
     /// </summary>
     public enum VisualizationMode {
         Debug,
+        Velocity,
+        Divergence,
         Pressure,
+    }
+
+    /// <summary>
+    /// Which channel of the velocity texture should be rendered
+    /// </summary>
+    public enum VelocityChannel {
+        Horizontal,
+        Vertical,
+        Both
     }
 
     MeshRenderer meshRenderer = null;
@@ -25,10 +36,19 @@ public class FluidRendererManager : MonoBehaviour {
     [Min(0.1f)]
     public float cellSize = 1f;
 
+    [Header("Velocity")]
+    public float velocityDisplayRange = 1f;
+    public VelocityChannel velocityChannel = VelocityChannel.Both;
+
+    [Header("Divergence")]
+    public float divergenceDisplayRange = 1f;
+    public Color negativeDivergenceColor = new Color(0.3f, 0.3f, 1f, 1f);
+    public Color positiveDivergenceColor = new Color(1f, 0.3f, 0.3f, 1f);
+
     [Header("Pressure")]
     public float pressureDisplayRange = 1f;
-    public Color negativePressureColor = new Color(0.3f, 1f, 0.3f, 0.7f);
-    public Color positivePressureColor = new Color(0.7f, 0.3f, 0.7f, 0.7f);
+    public Color negativePressureColor = new Color(0.3f, 1f, 0.3f, 1f);
+    public Color positivePressureColor = new Color(0.7f, 0.3f, 0.7f, 1f);
 
     public Vector2 WorldSize => (Vector2)grid.resolution * cellSize;
 
@@ -56,6 +76,16 @@ public class FluidRendererManager : MonoBehaviour {
         material.SetVector("resolution", (Vector2)grid.resolution);
         material.SetInteger("visualizationMode", (int)visualizationMode);
         material.SetTexture("debugMap", grid.debugMap);
+
+        // Velocity
+        material.SetTexture("velocityMap", grid.velocityMap);
+        material.SetInteger("velocityChannel", (int)velocityChannel);
+        material.SetFloat("velocityDisplayRange", velocityDisplayRange);
+
+        // Pressure
+        material.SetFloat("divergenceDisplayRange", divergenceDisplayRange);
+        material.SetVector("negativeDivergenceColor", negativeDivergenceColor);
+        material.SetVector("positiveDivergenceColor", positiveDivergenceColor);
 
         // Pressure
         material.SetTexture("pressureMap", grid.pressureMap);
@@ -86,6 +116,21 @@ public class FluidRendererManager : MonoBehaviour {
     /// <param name="grid">The Grid to render</param>
     public void SetGridToRender(FluidGridManager grid) {
         this.grid = grid;
+    }
+
+    /// <summary>
+    /// Cycle through visualization modes
+    /// </summary>
+    /// <param name="isForward">Change to the next visualization mode if its true, to the previous if false</param>
+    public void CycleVisualizationMode(bool isForward) {
+        var modeCount = VisualizationMode.GetNames(typeof(VisualizationMode)).Length;
+        int direction = isForward ? -1 : 1;
+
+        int mode = (int)visualizationMode + direction;
+        if (mode < 0)
+            mode += modeCount;
+        mode %= modeCount;
+        visualizationMode = (VisualizationMode)mode;
     }
 }
 }

@@ -1,4 +1,5 @@
 using UnityEngine;
+using Seb.Helpers;
 
 namespace FluidSimulationGPU {
 [RequireComponent(typeof(FluidRendererManager))]
@@ -27,10 +28,19 @@ public class Test : MonoBehaviour {
     public void Update() {
         grid.Setup();
         grid.SolvePressure(solverIterations, timeStep);
+        grid.UpdateVelocities(timeStep);
+
+        HandleInput();
     }
 
     public void OnDestroy() {
         grid.ReleaseTextures();
+    }
+
+    void HandleInput() {
+        if (InputHelper.IsKeyDownThisFrame(KeyCode.Tab)) {
+            fluidRenderer.CycleVisualizationMode(InputHelper.ShiftIsHeld);
+        }
     }
 }
 }

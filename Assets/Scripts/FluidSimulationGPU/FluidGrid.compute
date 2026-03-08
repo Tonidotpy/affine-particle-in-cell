@@ -1,6 +1,7 @@
 #pragma kernel Init
 #pragma kernel PreparePressureSolver
 #pragma kernel RunPressureSolver
+#pragma kernel UpdateVelocities
 
 // --- Constants --- //
 static const uint FLOW_TOP_BIT_POS = 31;
@@ -38,20 +39,20 @@ RWTexture2D<float> temperatureMap;
 RWTexture2D<float> smokeMap;
 
 // --- Utilities --- //
-bool IsInCellCenterBounds(uint i, uint j) {
-    return i >= 0 && i < resolution.x && j >= 0 && j < resolution.y;
+bool IsInCellCenterBounds(int i, int j) {
+    return i >= 0 && i < (int)resolution.x && j >= 0 && j < (int)resolution.y;
 }
 
-uint GetCellCenterValue(RWTexture2D<uint> grid, uint i, uint j, uint defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
-float GetCellCenterValue(RWTexture2D<float> grid, uint i, uint j, float defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
-float2 GetCellCenterValue(RWTexture2D<float2> grid, uint i, uint j, float2 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
-float4 GetCellCenterValue(RWTexture2D<float4> grid, uint i, uint j, float4 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
+uint GetCellCenterValue(RWTexture2D<uint> grid, int i, int j, uint defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
+float GetCellCenterValue(RWTexture2D<float> grid, int i, int j, float defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
+float2 GetCellCenterValue(RWTexture2D<float2> grid, int i, int j, float2 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
+float4 GetCellCenterValue(RWTexture2D<float4> grid, int i, int j, float4 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 
-uint GetCellType(uint i, uint j) {
+uint GetCellType(int i, int j) {
     return GetCellCenterValue(cellType, i, j, CELL_TYPE_SOLID);
 }
 
-float GetPressure(uint i, uint j) {
+float GetPressure(int i, int j) {
     return GetCellCenterValue(pressureMap, i, j, 0);
 }
 
@@ -93,17 +94,20 @@ void Init(uint3 id : SV_DispatchThreadID) {
 
     cellType[id.xy] = CELL_TYPE_FLUID;
     velocityMap[id.xy] = float2(0, 0);
+    if (id.x == 0) velocityMap[int2(resolution.x, id.y)] = float2(0, 0);
+    if (id.y == 0) velocityMap[int2(id.x, resolution.y)] = float2(0, 0);
     pressureMap[id.xy] = 0;
 
     // TODO: Remove
-    if (id.x == 120 && (id.y >= 40 && id.y <= 100))
+    if (id.x == 128 && (id.y >= 40 && id.y <= 104))
         velocityMap[id.xy] = float2(0, 10);
+    // if (id.y == 72 && (id.x >= 50 && id.x <= 206))
+    //     velocityMap[id.xy] = float2(10, 0);
 }
 
 [numthreads(8,8,1)]
 void PreparePressureSolver(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
-
 
     bool isSolid = cellType[id.xy] != CELL_TYPE_FLUID;
     uint flowTop = 1 - (isSolid | (GetCellType(id.x, id.y + 1) != CELL_TYPE_FLUID));
@@ -111,11 +115,14 @@ void PreparePressureSolver(uint3 id : SV_DispatchThreadID) {
     uint flowRight= 1 - (isSolid | (GetCellType(id.x + 1, id.y) != CELL_TYPE_FLUID));
     uint flowLeft = 1 - (isSolid | (GetCellType(id.x - 1, id.y) != CELL_TYPE_FLUID));
     uint flowEdgeCount = flowTop + flowBottom + flowRight + flowLeft;
-    uint flow = (flowBottom << FLOW_BOTTOM_BIT_POS) |
-        (flowTop << FLOW_TOP_BIT_POS) |
-        (flowLeft << FLOW_LEFT_BIT_POS) |
-        (flowRight << FLOW_RIGHT_BIT_POS) |
-        (flowEdgeCount & 0xFF);
+    // BUG: Apparently chaining all OR (|) operations into a single line
+    // causes the compiler to optimize too aggresively resulting in broken
+    // code that execute unexpectedly
+    uint flow = flowEdgeCount & 0xff;
+    flow |= (flowTop & 1) << FLOW_TOP_BIT_POS;
+    flow |= (flowBottom & 1) << FLOW_BOTTOM_BIT_POS;
+    flow |= (flowRight & 1) << FLOW_RIGHT_BIT_POS;
+    flow |= (flowLeft & 1) << FLOW_LEFT_BIT_POS;
 
     // debugMap[id.xy] = float4(flowTop - flowBottom, flowRight - flowLeft, 0, 1);
 
@@ -169,4 +176,29 @@ void RunPressureSolver(uint3 id : SV_DispatchThreadID) {
     float newPressure = (pressureSum - velocityTerm) / (float)flowEdgeCount;
     float oldPressure = pressureMap[cell];
     pressureMap[cell] = oldPressure + (newPressure - oldPressure) * sor;
+}
+
+[numthreads(8, 8, 1)]
+void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x + 1 || id.y >= resolution.y + 1) return;
+
+    if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
+        velocityMap[id.xy] = float2(0, 0);
+        return;
+    }
+
+    uint flowLeft = GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID;
+    uint flowBottom = GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID;
+
+    const float k = density / dt;
+    float pressureCenter = GetPressure(id.x, id.y);
+    float pressureLeft = GetPressure(id.x - 1, id.y);
+    float pressureBottom = GetPressure(id.x, id.y - 1);
+
+    float2 v = velocityMap[id.xy].xy;
+    v.x = flowLeft ? (v.x - k * (pressureCenter - pressureLeft)) : 0;
+    v.y = flowBottom ? (v.y - k * (pressureCenter - pressureBottom)) : 0;
+
+    // Update velocity
+    velocityMap[id.xy] = v.xy;
 }
