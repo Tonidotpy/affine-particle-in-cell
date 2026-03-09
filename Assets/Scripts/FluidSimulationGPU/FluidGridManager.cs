@@ -8,6 +8,8 @@ namespace FluidSimulationGPU {
 public class FluidGridManager {
     enum ComputeKernel {
         Init,
+        AdvectVelocities,
+        VelocityAdvectionReadback,
         PreparePressureSolver,
         RunPressureSolver,
         UpdateVelocities,
@@ -87,6 +89,7 @@ public class FluidGridManager {
         ComputeHelper.SetTexture(compute, debugMap, "debugMap", computeKernels);
         ComputeHelper.SetTexture(compute, cellType, "cellType", computeKernels);
         ComputeHelper.SetTexture(compute, velocityMap, "velocityMap", computeKernels);
+        ComputeHelper.SetTexture(compute, velocityMap, "velocityMapSample", computeKernels);
         ComputeHelper.SetTexture(compute, velocityMapAdvected, "velocityMapAdvected", computeKernels);
         ComputeHelper.SetTexture(compute, pressureMap, "pressureMap", computeKernels);
         ComputeHelper.SetBuffer(compute, pressureSolverData, "pressureSolverData", computeKernels);
@@ -96,6 +99,21 @@ public class FluidGridManager {
 
     void BindSettings() {
         compute.SetInts("resolution", resolution.x, resolution.y);
+    }
+
+    /// <summary>
+    /// Advect velocities using the Semi-Lagrangian method
+    /// In a Semi-Lagrangian method we can imagine a particle traveling at a
+    /// certain velocity landing on the Cell borders.
+    /// Since we know the final position and velocity of the "virtual particle"
+    /// via interpolation we can calculate its previous position given the
+    /// simulation time step
+    /// </summary>
+    /// <param name="dt">Time difference between two simulation steps in seconds</param>
+    public void AdvectVelocities(float dt) {
+        compute.SetFloat("dt", dt);
+        ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.AdvectVelocities);
+        ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.VelocityAdvectionReadback);
     }
 
     /// <summary>

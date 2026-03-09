@@ -27,6 +27,9 @@ public class Test : MonoBehaviour {
 
     public void Update() {
         grid.Setup();
+
+        grid.AdvectVelocities(timeStep);
+
         grid.SolvePressure(solverIterations, timeStep);
         grid.UpdateVelocities(timeStep);
 

@@ -1,4 +1,6 @@
 #pragma kernel Init
+#pragma kernel AdvectVelocities
+#pragma kernel VelocityAdvectionReadback
 #pragma kernel PreparePressureSolver
 #pragma kernel RunPressureSolver
 #pragma kernel UpdateVelocities
@@ -37,6 +39,10 @@ RWTexture2D<float> pressureMap;
 RWStructuredBuffer<PressureSolverData> pressureSolverData;
 RWTexture2D<float> temperatureMap;
 RWTexture2D<float> smokeMap;
+
+// --- Samplers --- //
+Texture2D<float2> velocityMapSample;
+SamplerState sampler_velocityMapSample;
 
 // --- Utilities --- //
 bool IsInCellCenterBounds(int i, int j) {
@@ -87,6 +93,23 @@ uint2 GetCheckerboardCellCoordinates(uint index, uint passIndex, uint2 resolutio
     return uint2(x, y);
 }
 
+float2 SampleVelocity(float2 position) {
+    // Horizontal velocity
+    float2 uvX = (position - float2(-0.5, 0)) / resolution;
+    float velocityX = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvX, 0).x;
+
+    // Vertical velocity
+    float2 uvY = (position - float2(0, -0.5)) / resolution;
+    float velocityY = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvY, 0).y;
+
+    return float2(velocityX, velocityY);
+}
+
+float2 RewindPos(float2 position) {
+    float2 velocity = SampleVelocity(position);
+    return position - velocity * dt;
+}
+
 // --- Kernels --- //
 [numthreads(8,8,1)]
 void Init(uint3 id : SV_DispatchThreadID) {
@@ -103,6 +126,34 @@ void Init(uint3 id : SV_DispatchThreadID) {
         velocityMap[id.xy] = float2(0, 10);
     // if (id.y == 72 && (id.x >= 50 && id.x <= 206))
     //     velocityMap[id.xy] = float2(10, 0);
+}
+
+[numthreads(8,8,1)]
+void AdvectVelocities(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x + 1 || id.y >= resolution.y + 1) return;
+
+    if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
+        velocityMapAdvected[id.xy] = velocityMapSample[id.xy];
+        return;
+    }
+
+    uint flowLeft = GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID;
+    uint flowBottom = GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID;
+
+    float2 v = velocityMapSample[id.xy];
+    float2 positionPrevLeft = RewindPos(float2(id.x - 0.5, id.y));
+    float2 positionPrevBottom = RewindPos(float2(id.x, id.y - 0.5));
+    v.x = flowLeft ? SampleVelocity(positionPrevLeft).x : v.x;
+    v.y = flowBottom ? SampleVelocity(positionPrevBottom).y : v.y;
+
+    // Update velocities
+    velocityMapAdvected[id.xy] = v;
+}
+
+[numthreads(8,8,1)]
+void VelocityAdvectionReadback(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x + 1 || id.y >= resolution.y + 1) return;
+    velocityMap[id.xy] = velocityMapAdvected[id.xy];
 }
 
 [numthreads(8,8,1)]
