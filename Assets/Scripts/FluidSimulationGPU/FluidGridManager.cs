@@ -66,14 +66,21 @@ public class FluidGridManager {
     }
 
     void CreateTextures() {
-        ComputeHelper.CreateRenderTexture(ref debugMap, resolution.x, resolution.y, FilterMode.Point, GraphicsFormat.R32G32B32A32_SFloat);
-        ComputeHelper.CreateRenderTexture(ref cellType, resolution.x, resolution.y, FilterMode.Point, GraphicsFormat.R8_UInt);
-        ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x + 1, resolution.y + 1, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
-        ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x + 1, resolution.y + 1, FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
-        ComputeHelper.CreateRenderTexture(ref pressureMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref debugMap, resolution.x, resolution.y, FilterMode.Point,
+                                          GraphicsFormat.R32G32B32A32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref cellType, resolution.x, resolution.y, FilterMode.Point,
+                                          GraphicsFormat.R8_UInt);
+        ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x + 1, resolution.y + 1, FilterMode.Bilinear,
+                                          GraphicsFormat.R32G32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x + 1, resolution.y + 1,
+                                          FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref pressureMap, resolution.x, resolution.y, FilterMode.Bilinear,
+                                          GraphicsFormat.R32_SFloat);
         ComputeHelper.CreateStructuredBuffer<PressureSolverData>(ref pressureSolverData, resolution.x * resolution.y);
-        ComputeHelper.CreateRenderTexture(ref temperatureMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32_SFloat);
-        ComputeHelper.CreateRenderTexture(ref smokeMap, resolution.x, resolution.y, FilterMode.Bilinear, GraphicsFormat.R32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref temperatureMap, resolution.x, resolution.y, FilterMode.Bilinear,
+                                          GraphicsFormat.R32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref smokeMap, resolution.x, resolution.y, FilterMode.Bilinear,
+                                          GraphicsFormat.R32_SFloat);
     }
 
     void BindTextures() {
@@ -117,14 +124,8 @@ public class FluidGridManager {
 
     public void ReleaseTextures() {
         ComputeHelper.Release(pressureSolverData);
-        ComputeHelper.Release(
-            debugMap,
-            cellType,
-            velocityMap,
-            velocityMapAdvected,
-            pressureMap,
-            temperatureMap,
-            smokeMap);
+        ComputeHelper.Release(debugMap, cellType, velocityMap, velocityMapAdvected, pressureMap, temperatureMap,
+                              smokeMap);
     }
 }
 }

@@ -130,8 +130,10 @@ public class FluidTest : MonoBehaviour {
                     float x = i;
                     float y = j;
                     Vector2 velocityDelta = mouseDelta * weight * velocityStrenght;
-                    float newVelocityU = grid.GetVelocity(grid.velocityU, x - 0.5f, y, FluidGridMac.Axis.X) + velocityDelta.x;
-                    float newVelocityV = grid.GetVelocity(grid.velocityV, x, y - 0.5f, FluidGridMac.Axis.Y) + velocityDelta.y;
+                    float newVelocityU =
+                        grid.GetVelocity(grid.velocityU, x - 0.5f, y, FluidGridMac.Axis.X) + velocityDelta.x;
+                    float newVelocityV =
+                        grid.GetVelocity(grid.velocityV, x, y - 0.5f, FluidGridMac.Axis.Y) + velocityDelta.y;
                     grid.SetVelocity(grid.velocityU, x - 0.5f, y, FluidGridMac.Axis.X, newVelocityU);
                     grid.SetVelocity(grid.velocityV, x, y - 0.5f, FluidGridMac.Axis.Y, newVelocityV);
                 }

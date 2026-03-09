@@ -183,11 +183,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.FluidRendererManager
   shader: {fileID: 4800000, guid: df9b484deacb6ce4f9279669e9b2708a, type: 3}
-  visualizationMode: 2
+  visualizationMode: 1
   cellSize: 1
   velocityDisplayRange: 1
   velocityChannel: 2
-  divergenceDisplayRange: 1
+  divergenceDisplayRange: 0.2
   negativeDivergenceColor: {r: 0.3, g: 0.3, b: 1, a: 1}
   positiveDivergenceColor: {r: 1, g: 0.3, b: 0.3, a: 1}
   pressureDisplayRange: 10
