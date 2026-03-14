@@ -1,6 +1,8 @@
 #pragma kernel Init
 #pragma kernel AdvectVelocities
 #pragma kernel VelocityAdvectionReadback
+#pragma kernel AdvectSmoke
+#pragma kernel SmokeAdvectionReadback
 #pragma kernel PreparePressureSolver
 #pragma kernel RunPressureSolver
 #pragma kernel UpdateVelocities
@@ -29,6 +31,7 @@ const float dt; // s
 const float density; // kg/m^2
 const float sor;
 const uint solverPassIndex;
+const float ambientTemperature; // K
 
 // --- Textures --- //
 RWTexture2D<float4> debugMap;
@@ -38,11 +41,14 @@ RWTexture2D<float2> velocityMapAdvected;
 RWTexture2D<float> pressureMap;
 RWStructuredBuffer<PressureSolverData> pressureSolverData;
 RWTexture2D<float> temperatureMap;
-RWTexture2D<float> smokeMap;
+RWTexture2D<float4> smokeMap;
+RWTexture2D<float4> smokeMapAdvected;
 
 // --- Samplers --- //
 Texture2D<float2> velocityMapSample;
 SamplerState sampler_velocityMapSample;
+Texture2D<float> smokeMapSample;
+SamplerState sampler_smokeMapSample;
 
 // --- Utilities --- //
 bool IsInCellCenterBounds(int i, int j) {
@@ -95,11 +101,11 @@ uint2 GetCheckerboardCellCoordinates(uint index, uint passIndex, uint2 resolutio
 
 float2 SampleVelocity(float2 position) {
     // Horizontal velocity
-    float2 uvX = (position - float2(-0.5, 0)) / resolution;
+    float2 uvX = (position - float2(-0.5, 0)) / float2(resolution.xy);
     float velocityX = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvX, 0).x;
 
     // Vertical velocity
-    float2 uvY = (position - float2(0, -0.5)) / resolution;
+    float2 uvY = (position - float2(0, -0.5)) / float2(resolution.xy);
     float velocityY = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvY, 0).y;
 
     return float2(velocityX, velocityY);
@@ -108,6 +114,13 @@ float2 SampleVelocity(float2 position) {
 float2 RewindPos(float2 position) {
     float2 velocity = SampleVelocity(position);
     return position - velocity * dt;
+}
+
+float4 SampleSmoke(float2 position) {
+    float2 uv = (position.xy + float2(0.5, 0.5)) / float2(resolution.xy);
+    if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1)
+        return 0;
+    return smokeMapSample.SampleLevel(sampler_smokeMapSample, uv.xy, 0);
 }
 
 // --- Kernels --- //
@@ -120,10 +133,13 @@ void Init(uint3 id : SV_DispatchThreadID) {
     if (id.x == 0) velocityMap[int2(resolution.x, id.y)] = float2(0, 0);
     if (id.y == 0) velocityMap[int2(id.x, resolution.y)] = float2(0, 0);
     pressureMap[id.xy] = 0;
+    smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
 
     // TODO: Remove
     if (id.x == 128 && (id.y >= 40 && id.y <= 104))
         velocityMap[id.xy] = float2(0, 10);
+    if ((id.x >= 108 && id.x <= 148) && (id.y >= 30 && id.y <= 50))
+        smokeMap[id.xy] = float4(1, 0, 0, ambientTemperature);
     // if (id.y == 72 && (id.x >= 50 && id.x <= 206))
     //     velocityMap[id.xy] = float2(10, 0);
 }
@@ -154,6 +170,25 @@ void AdvectVelocities(uint3 id : SV_DispatchThreadID) {
 void VelocityAdvectionReadback(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x + 1 || id.y >= resolution.y + 1) return;
     velocityMap[id.xy] = velocityMapAdvected[id.xy];
+}
+
+[numthreads(8,8,1)]
+void AdvectSmoke(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+
+    float2 positionPrev = RewindPos(float2(id.xy));
+    float4 smoke = SampleSmoke(positionPrev);
+
+    // Update smoke
+    smokeMapAdvected[id.xy] = smoke;
+}
+
+[numthreads(8,8,1)]
+void SmokeAdvectionReadback(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    smokeMap[id.xy] = smokeMapAdvected[id.xy];
+
+    // TODO: Temperature diffusion and decay
 }
 
 [numthreads(8,8,1)]

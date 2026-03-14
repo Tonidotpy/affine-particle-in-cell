@@ -10,6 +10,8 @@ public class FluidGridManager {
         Init,
         AdvectVelocities,
         VelocityAdvectionReadback,
+        AdvectSmoke,
+        SmokeAdvectionReadback,
         PreparePressureSolver,
         RunPressureSolver,
         UpdateVelocities,
@@ -52,6 +54,7 @@ public class FluidGridManager {
     public ComputeBuffer pressureSolverData;
     public RenderTexture temperatureMap;
     public RenderTexture smokeMap;
+    public RenderTexture smokeMapAdvected;
 
     public FluidGridManager(int width, int height, ComputeShader compute) {
         resolution = new(width, height);
@@ -82,7 +85,9 @@ public class FluidGridManager {
         ComputeHelper.CreateRenderTexture(ref temperatureMap, resolution.x, resolution.y, FilterMode.Bilinear,
                                           GraphicsFormat.R32_SFloat);
         ComputeHelper.CreateRenderTexture(ref smokeMap, resolution.x, resolution.y, FilterMode.Bilinear,
-                                          GraphicsFormat.R32_SFloat);
+                                          GraphicsFormat.R32G32B32A32_SFloat);
+        ComputeHelper.CreateRenderTexture(ref smokeMapAdvected, resolution.x, resolution.y, FilterMode.Bilinear,
+                                          GraphicsFormat.R32G32B32A32_SFloat);
     }
 
     void BindTextures() {
@@ -95,10 +100,13 @@ public class FluidGridManager {
         ComputeHelper.SetBuffer(compute, pressureSolverData, "pressureSolverData", computeKernels);
         ComputeHelper.SetTexture(compute, temperatureMap, "temperatureMap", computeKernels);
         ComputeHelper.SetTexture(compute, smokeMap, "smokeMap", computeKernels);
+        ComputeHelper.SetTexture(compute, smokeMap, "smokeMapSample", computeKernels);
+        ComputeHelper.SetTexture(compute, smokeMapAdvected, "smokeMapAdvected", computeKernels);
     }
 
     void BindSettings() {
         compute.SetInts("resolution", resolution.x, resolution.y);
+        compute.SetFloat("ambientTemperature", ambientTemperature);
     }
 
     /// <summary>
@@ -114,6 +122,21 @@ public class FluidGridManager {
         compute.SetFloat("dt", dt);
         ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.AdvectVelocities);
         ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.VelocityAdvectionReadback);
+    }
+
+    /// <summary>
+    /// Advect smoke using the Semi-Lagrangian method
+    /// In a Semi-Lagrangian method we can imagine a particle traveling at a
+    /// certain velocity landing on the Cell center.
+    /// Since we know the final position and velocity of the "virtual particle"
+    /// via interpolation we can calculate its previous position given the
+    /// simulation time step
+    /// </summary>
+    /// <param name="dt">Time difference between two simulation steps in seconds</param>
+    public void AdvectSmoke(float dt) {
+        compute.SetFloat("dt", dt);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.AdvectSmoke);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.SmokeAdvectionReadback);
     }
 
     /// <summary>
@@ -143,7 +166,7 @@ public class FluidGridManager {
     public void ReleaseTextures() {
         ComputeHelper.Release(pressureSolverData);
         ComputeHelper.Release(debugMap, cellType, velocityMap, velocityMapAdvected, pressureMap, temperatureMap,
-                              smokeMap);
+                              smokeMap, smokeMapAdvected);
     }
 }
 }

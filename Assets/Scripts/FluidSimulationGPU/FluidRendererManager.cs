@@ -14,6 +14,7 @@ public class FluidRendererManager : MonoBehaviour {
         Velocity,
         Divergence,
         Pressure,
+        Smoke,
     }
 
     /// <summary>
@@ -49,6 +50,9 @@ public class FluidRendererManager : MonoBehaviour {
     public float pressureDisplayRange = 1f;
     public Color negativePressureColor = new Color(0.3f, 1f, 0.3f, 1f);
     public Color positivePressureColor = new Color(0.7f, 0.3f, 0.7f, 1f);
+
+    [Header("Smoke")]
+    public float smokeDisplayRange = 1f;
 
     public Vector2 WorldSize => (Vector2)grid.resolution * cellSize;
 
@@ -92,6 +96,10 @@ public class FluidRendererManager : MonoBehaviour {
         material.SetFloat("pressureDisplayRange", pressureDisplayRange);
         material.SetVector("negativePressureColor", negativePressureColor);
         material.SetVector("positivePressureColor", positivePressureColor);
+
+        // Smoke
+        material.SetTexture("smokeMap", grid.smokeMap);
+        material.SetFloat("smokeDisplayRange", smokeDisplayRange);
     }
 
     void RenderInput() {
@@ -107,7 +115,8 @@ public class FluidRendererManager : MonoBehaviour {
         }
 
         Draw.StartLayerIfNotInMatching(Vector2.zero, 1, true);
-        Draw.Text(FontType.JetbrainsMonoRegular, $"Mode: {visualizationMode}", 20f, new Vector2(30f, Screen.height - 20f), Anchor.TopLeft, Color.white);
+        Draw.Text(FontType.JetbrainsMonoRegular, $"Mode: {visualizationMode}", 20f,
+                  new Vector2(30f, Screen.height - 20f), Anchor.TopLeft, Color.white);
     }
 
     /// <summary>

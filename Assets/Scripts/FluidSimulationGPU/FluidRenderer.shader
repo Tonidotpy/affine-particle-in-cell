@@ -21,6 +21,7 @@ Shader "Unlit/FluidRenderer" {
 #define VISUALIZATION_MODE_VELOCITY (1)
 #define VISUALIZATION_MODE_DIVERGENCE (2)
 #define VISUALIZATION_MODE_PRESSURE (3)
+#define VISUALIZATION_MODE_SMOKE (4)
 
             struct appdata {
                 float4 vertex : POSITION;
@@ -51,6 +52,10 @@ Shader "Unlit/FluidRenderer" {
             float pressureDisplayRange;
             fixed4 negativePressureColor;
             fixed4 positivePressureColor;
+
+            // Smoke
+            sampler2D smokeMap;
+            float smokeDisplayRange;
 
             v2f vert(appdata v) {
                 v2f o;
@@ -94,6 +99,11 @@ Shader "Unlit/FluidRenderer" {
                 return fixed4(col.rgb * abs(pressure * pressureDisplayRange), col.a);
             }
 
+            fixed4 RenderSmoke(v2f i) {
+                float smoke = tex2D(smokeMap, i.uv).r;
+                return fixed4(smoke * abs(smoke * smokeDisplayRange), 0, 0, 1.0);
+            }
+
             fixed4 frag(v2f i) : SV_Target {
                 fixed4 col = fixed4(1, 0, 1, 1);
 
@@ -105,7 +115,8 @@ Shader "Unlit/FluidRenderer" {
                     col = RenderDivergence(i);
                 else if (visualizationMode == VISUALIZATION_MODE_PRESSURE)
                     col = RenderPressure(i);
-
+                else if (visualizationMode == VISUALIZATION_MODE_SMOKE)
+                    col = RenderSmoke(i);
                 return col;
             }
             ENDCG
