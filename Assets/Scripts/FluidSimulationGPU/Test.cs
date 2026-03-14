@@ -4,46 +4,50 @@ using Seb.Helpers;
 namespace FluidSimulationGPU {
 [RequireComponent(typeof(FluidRendererManager))]
 public class Test : MonoBehaviour {
-    FluidGridManager grid;
-    FluidRendererManager fluidRenderer;
-
+    [Header("Grid Settings")]
     public ComputeShader compute;
     public Vector2Int resolution = new(50, 50);
-    public float timeStepMultiplier = 1;
+    public float fluidDensity = 1.3f; // kg/m^2
+
+    [Header("Simulation Settings")]
     public int solverIterations = 15;
+    public float sor = 1.7f;
+    public float timeStepMultiplier = 1f;
+    public float ambientTemperature = 25f; // °C
 
-    /// <summary>
-    /// Simulation time step in seconds
-    /// </summary>
-    float timeStep => 1f / (60f * timeStepMultiplier);
+    FluidSimulation simulation;
+    FluidRendererManager simulationRenderer;
 
-    public void Start() {
-        grid = new FluidGridManager(resolution.x, resolution.y, compute);
-        fluidRenderer = GetComponent<FluidRendererManager>();
-        fluidRenderer.SetGridToRender(grid);
+    void Start() {
+        simulation = new FluidSimulation(resolution.x, resolution.y, compute);
+        simulationRenderer = GetComponent<FluidRendererManager>();
+        simulationRenderer.SetGridToRender(simulation.GridManager);
 
-        Camera.main.orthographicSize = resolution.y * fluidRenderer.cellSize * 0.6f;
+        Camera.main.orthographicSize = resolution.y * simulationRenderer.cellSize * 0.6f;
     }
 
-    public void Update() {
-        grid.Setup();
+    void Update() {
+        UpdateSimulationSettings();
 
-        grid.AdvectVelocities(timeStep);
-        grid.AdvectSmoke(timeStep);
-
-        grid.SolvePressure(solverIterations, timeStep);
-        grid.UpdateVelocities(timeStep);
-
+        simulation.RunStep();
         HandleInput();
     }
 
-    public void OnDestroy() {
-        grid.ReleaseTextures();
+    void OnDestroy() {
+        simulation.Clean();
+    }
+
+    void UpdateSimulationSettings() {
+        simulation.SOR = sor;
+        simulation.TimeStepMultiplier = timeStepMultiplier;
+        simulation.SolverIterations = solverIterations;
+        simulation.FluidDensity = fluidDensity;
+        simulation.AmbientTemperature = ambientTemperature;
     }
 
     void HandleInput() {
         if (InputHelper.IsKeyDownThisFrame(KeyCode.Tab)) {
-            fluidRenderer.CycleVisualizationMode(InputHelper.ShiftIsHeld);
+            simulationRenderer.CycleVisualizationMode(InputHelper.ShiftIsHeld);
         }
     }
 }
