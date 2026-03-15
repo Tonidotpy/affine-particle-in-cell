@@ -58,6 +58,7 @@ public class FluidRendererManager : MonoBehaviour {
 
     [Header("Smoke")]
     public float smokeDisplayRange = 1f;
+    public Color smokeColor = new Color(1f, 1f, 1f, 1f);
 
     public Vector2 WorldSize => (Vector2)grid.resolution * cellSize;
 

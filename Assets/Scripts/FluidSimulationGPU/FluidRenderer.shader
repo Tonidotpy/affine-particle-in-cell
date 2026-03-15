@@ -100,8 +100,8 @@ Shader "Unlit/FluidRenderer" {
             }
 
             fixed4 RenderSmoke(v2f i) {
-                float smoke = tex2D(smokeMap, i.uv).r;
-                return fixed4(smoke * abs(smoke * smokeDisplayRange), 0, 0, 1.0);
+                float3 smoke = tex2D(smokeMap, i.uv).rgb;
+                return fixed4(smoke * abs(smoke * smokeDisplayRange), 1);
             }
 
             fixed4 frag(v2f i) : SV_Target {

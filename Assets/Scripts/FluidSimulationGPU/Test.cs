@@ -78,7 +78,8 @@ public class Test : MonoBehaviour {
 
         if (isMouseRightHeld) {
             Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
-            simulation.GridManager.AddSmokeAtPosition(cellCenter, mouseInputRadius, smokeAmount);
+            simulation.GridManager.AddSmokeAtPosition(cellCenter, mouseInputRadius, smokeAmount,
+                                                      simulationRenderer.smokeColor);
         }
 
         simulationRenderer.inputRadius = Mathf.Max(0, simulationRenderer.inputRadius + mouseScrollDelta * 0.1f);

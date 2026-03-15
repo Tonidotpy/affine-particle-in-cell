@@ -38,6 +38,7 @@ const bool inputShouldAddSmoke;
 const float2 inputSmokePosition;
 const float inputSmokeRadius;
 const float inputSmokeAmount;
+const float3 inputSmokeColor;
 
 // --- Textures --- //
 RWTexture2D<float4> debugMap;
@@ -53,7 +54,7 @@ RWTexture2D<float4> smokeMapAdvected;
 // --- Samplers --- //
 Texture2D<float2> velocityMapSample;
 SamplerState sampler_velocityMapSample;
-Texture2D<float> smokeMapSample;
+Texture2D<float4> smokeMapSample;
 SamplerState sampler_smokeMapSample;
 
 // --- Utilities --- //
@@ -302,7 +303,7 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
         float d = distance(id.xy, inputSmokePosition);
         if (d <= inputSmokeRadius) {
             float fallof = 1 - (d / inputSmokeRadius);
-            smokeMap[id.xy] += float4(inputSmokeAmount * fallof, 0, 0, 1);
+            smokeMap[id.xy] += float4(inputSmokeColor * inputSmokeAmount * fallof, 0);
         }
     }
 }

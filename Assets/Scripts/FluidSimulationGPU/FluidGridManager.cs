@@ -170,11 +170,13 @@ public class FluidGridManager {
     /// <param name="center">Coordinates where the smoke is added</param>
     /// <param name="amount">Amount of smoke to add</param>
     /// <param name="radius">Radius of the circle where the smoke is added</param>
-    public void AddSmokeAtPosition(Vector2 center, float radius, float amount) {
+    /// <param name="color">Smoke color</param>
+    public void AddSmokeAtPosition(Vector2 center, float radius, float amount, Color color) {
         compute.SetBool("inputShouldAddSmoke", true);
         compute.SetVector("inputSmokePosition", center);
         compute.SetFloat("inputSmokeRadius", radius);
         compute.SetFloat("inputSmokeAmount", amount);
+        compute.SetVector("inputSmokeColor", color);
     }
 
     public void HandleInput() {
