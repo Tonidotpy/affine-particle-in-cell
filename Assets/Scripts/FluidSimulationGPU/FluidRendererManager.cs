@@ -33,6 +33,11 @@ public class FluidRendererManager : MonoBehaviour {
     public Shader shader;
     public VisualizationMode visualizationMode = VisualizationMode.Debug;
 
+    [Header("Input")]
+    public float inputRadius = 15f;
+    public Color inputColor = new Color(1f, 1f, 1f, 0.3f);
+    public Color inputActiveColor = new Color(0f, 1f, 0.1f, 0.3f);
+
     [Header("Grid settings")]
     [Min(0.1f)]
     public float cellSize = 1f;
@@ -102,10 +107,9 @@ public class FluidRendererManager : MonoBehaviour {
         material.SetFloat("smokeDisplayRange", smokeDisplayRange);
     }
 
-    void RenderInput() {
-        // TODO: Render input
-        // Draw.StartLayerIfNotInMatching(Vector2.zero, 1, false);
-        // Draw.Point(mousePosition, inputRadius, isMousePressed ? inputActiveColor : inputColor);
+    public void RenderInput(Vector2 mousePosition, bool isMousePressed) {
+        Draw.StartLayerIfNotInMatching(Vector2.zero, 1, false);
+        Draw.Point(mousePosition, inputRadius, isMousePressed ? inputActiveColor : inputColor);
     }
 
     public void Update() {
@@ -117,6 +121,33 @@ public class FluidRendererManager : MonoBehaviour {
         Draw.StartLayerIfNotInMatching(Vector2.zero, 1, true);
         Draw.Text(FontType.JetbrainsMonoRegular, $"Mode: {visualizationMode}", 20f,
                   new Vector2(30f, Screen.height - 20f), Anchor.TopLeft, Color.white);
+    }
+
+    /// <summary>
+    /// Convert coordinates from the fluid Grid reference system to the Unity
+    /// world reference system.
+    /// </summary>
+    /// <param name="i">Horizontal coordinate in Grid space</param>
+    /// <param name="j">Vertical coordinate in Grid space</param>
+    /// <returns>Converted coordinates in world space</returns>
+    public Vector2 CellCenterToWorld(int i, int j) {
+        return CellCenterToWorld((float)i, (float)j);
+    }
+    public Vector2 CellCenterToWorld(float x, float y) {
+        return new Vector2(x - (grid.resolution.x - 1) * 0.5f, y - (grid.resolution.y - 1) * 0.5f) * cellSize;
+    }
+
+    /// <summary>
+    /// Convert coordinates from the Uniy world reference system to the fluid
+    /// Grid reference system.
+    /// </summary>
+    /// <param name="position">Coordinate in world space</param>
+    /// <returns>Converted coordinates in Grid space</returns>
+    public Vector2Int WorldToCellCenter(Vector2 position) {
+        Vector2 cell = position / cellSize;
+        cell.x += (grid.resolution.x - 1) * 0.5f;
+        cell.y += (grid.resolution.y - 1) * 0.5f;
+        return Vector2Int.RoundToInt(cell);
     }
 
     /// <summary>

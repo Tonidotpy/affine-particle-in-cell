@@ -6,6 +6,7 @@
 #pragma kernel PreparePressureSolver
 #pragma kernel RunPressureSolver
 #pragma kernel UpdateVelocities
+#pragma kernel HandleInput
 
 // --- Constants --- //
 static const uint FLOW_TOP_BIT_POS = 31;
@@ -32,6 +33,11 @@ const float density; // kg/m^2
 const float sor;
 const uint solverPassIndex;
 const float ambientTemperature; // K
+
+const bool inputShouldAddSmoke;
+const float2 inputSmokePosition;
+const float inputSmokeRadius;
+const float inputSmokeAmount;
 
 // --- Textures --- //
 RWTexture2D<float4> debugMap;
@@ -138,8 +144,6 @@ void Init(uint3 id : SV_DispatchThreadID) {
     // TODO: Remove
     if (id.x == 128 && (id.y >= 40 && id.y <= 104))
         velocityMap[id.xy] = float2(0, 10);
-    if ((id.x >= 108 && id.x <= 148) && (id.y >= 30 && id.y <= 50))
-        smokeMap[id.xy] = float4(1, 0, 0, ambientTemperature);
     // if (id.y == 72 && (id.x >= 50 && id.x <= 206))
     //     velocityMap[id.xy] = float2(10, 0);
 }
@@ -287,4 +291,18 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
 
     // Update velocity
     velocityMap[id.xy] = v.xy;
+}
+
+[numthreads(8, 8, 1)]
+void HandleInput(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x && id.y >= resolution.y) return;
+
+    // Add smoke
+    if (inputShouldAddSmoke && GetCellType(id.x, id.y) == CELL_TYPE_FLUID) {
+        float d = distance(id.xy, inputSmokePosition);
+        if (d <= inputSmokeRadius) {
+            float fallof = 1 - (d / inputSmokeRadius);
+            smokeMap[id.xy] += float4(inputSmokeAmount * fallof, 0, 0, 1);
+        }
+    }
 }

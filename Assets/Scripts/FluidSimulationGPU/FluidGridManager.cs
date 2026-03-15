@@ -15,6 +15,7 @@ public class FluidGridManager {
         PreparePressureSolver,
         RunPressureSolver,
         UpdateVelocities,
+        HandleInput,
     }
 
     /// <summary>
@@ -161,6 +162,24 @@ public class FluidGridManager {
         compute.SetFloat("dt", dt);
         compute.SetFloat("density", density);
         ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.UpdateVelocities);
+    }
+
+    /// <summary>
+    /// Add a specific amount of smoke at a given position inside a circle in the Grid
+    /// </summary>
+    /// <param name="center">Coordinates where the smoke is added</param>
+    /// <param name="amount">Amount of smoke to add</param>
+    /// <param name="radius">Radius of the circle where the smoke is added</param>
+    public void AddSmokeAtPosition(Vector2 center, float radius, float amount) {
+        compute.SetBool("inputShouldAddSmoke", true);
+        compute.SetVector("inputSmokePosition", center);
+        compute.SetFloat("inputSmokeRadius", radius);
+        compute.SetFloat("inputSmokeAmount", amount);
+    }
+
+    public void HandleInput() {
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.HandleInput);
+        compute.SetBool("inputShouldAddSmoke", false);
     }
 
     public void ReleaseTextures() {

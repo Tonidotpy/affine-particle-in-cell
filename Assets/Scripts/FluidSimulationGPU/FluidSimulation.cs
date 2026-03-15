@@ -83,6 +83,10 @@ public class FluidSimulation {
         gridManager.UpdateVelocities(timeStep);
     }
 
+    public void HandleInput() {
+        gridManager.HandleInput();
+    }
+
     public void Clean() {
         gridManager.ReleaseTextures();
     }
