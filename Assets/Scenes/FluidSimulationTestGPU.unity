@@ -159,7 +159,7 @@ MonoBehaviour:
   timeStepMultiplier: 1
   ambientTemperature: 25
   isSimulationPaused: 1
-  velocityStrenght: 5
+  velocityMultiplier: 5
   smokeAmount: 0.2
 --- !u!4 &1407357499
 Transform:
@@ -199,10 +199,10 @@ MonoBehaviour:
   divergenceDisplayRange: 0.2
   negativeDivergenceColor: {r: 0.3, g: 0.3, b: 1, a: 1}
   positiveDivergenceColor: {r: 1, g: 0.3, b: 0.3, a: 1}
-  pressureDisplayRange: 10
+  pressureDisplayRange: 1
   negativePressureColor: {r: 0.3, g: 1, b: 0.3, a: 1}
   positivePressureColor: {r: 0.7, g: 0.3, b: 0.7, a: 1}
-  smokeDisplayRange: 10
+  smokeDisplayRange: 1
   smokeColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!23 &1407357502
 MeshRenderer:

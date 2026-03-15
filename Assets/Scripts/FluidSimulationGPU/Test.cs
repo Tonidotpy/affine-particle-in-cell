@@ -17,7 +17,7 @@ public class Test : MonoBehaviour {
     public bool isSimulationPaused = false;
 
     [Header("Velocity Settings")]
-    public float velocityStrenght = 5f;
+    public float velocityMultiplier = 5f;
 
     [Header("Smoke Settings")]
     public float smokeAmount = 0.2f;
@@ -74,6 +74,12 @@ public class Test : MonoBehaviour {
         }
         if (isSimulationPaused && Input.GetKeyDown(KeyCode.N)) {
             shouldRunSimulationStepOnce = true;
+        }
+
+        if (isMouseLeftHeld) {
+            Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
+            Vector2 mouseDelta = mousePosition - mousePositionOld;
+            simulation.GridManager.SetVelocityAtPosition(cellCenter, mouseInputRadius, velocityMultiplier * mouseDelta);
         }
 
         if (isMouseRightHeld) {

@@ -165,11 +165,24 @@ public class FluidGridManager {
     }
 
     /// <summary>
+    /// Set a specific velocity amount at a given position inside a circle in the Grid
+    /// </summary>
+    /// <param name="center">Coordinates where the velocity is set</param>
+    /// <param name="radius">Radius of the circle where the velocity is set</param>
+    /// <param name="velocity">The velocity to set</param>
+    public void SetVelocityAtPosition(Vector2 center, float radius, Vector2 velocity) {
+        compute.SetBool("inputShouldSetVelocity", true);
+        compute.SetVector("inputVelocityPosition", center);
+        compute.SetFloat("inputVelocityRadius", radius);
+        compute.SetVector("inputVelocity", velocity);
+    }
+
+    /// <summary>
     /// Add a specific amount of smoke at a given position inside a circle in the Grid
     /// </summary>
     /// <param name="center">Coordinates where the smoke is added</param>
-    /// <param name="amount">Amount of smoke to add</param>
     /// <param name="radius">Radius of the circle where the smoke is added</param>
+    /// <param name="amount">Amount of smoke to add</param>
     /// <param name="color">Smoke color</param>
     public void AddSmokeAtPosition(Vector2 center, float radius, float amount, Color color) {
         compute.SetBool("inputShouldAddSmoke", true);
@@ -181,6 +194,7 @@ public class FluidGridManager {
 
     public void HandleInput() {
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.HandleInput);
+        compute.SetBool("inputShouldSetVelocity", false);
         compute.SetBool("inputShouldAddSmoke", false);
     }
 

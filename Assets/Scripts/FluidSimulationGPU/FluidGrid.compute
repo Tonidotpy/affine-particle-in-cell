@@ -40,6 +40,11 @@ const float inputSmokeRadius;
 const float inputSmokeAmount;
 const float3 inputSmokeColor;
 
+const bool inputShouldSetVelocity;
+const float2 inputVelocityPosition;
+const float inputVelocityRadius;
+const float2 inputVelocity;
+
 // --- Textures --- //
 RWTexture2D<float4> debugMap;
 RWTexture2D<uint> cellType;
@@ -130,6 +135,13 @@ float4 SampleSmoke(float2 position) {
     return smokeMapSample.SampleLevel(sampler_smokeMapSample, uv.xy, 0);
 }
 
+float CalculateInputVelocityWeight(float2 position) {
+    float2 offset = inputVelocityPosition - position;
+    float sqrDistance = dot(offset, offset);
+    float sqrRadius = inputVelocityRadius * inputVelocityRadius;
+    return 1.0 - saturate(sqrDistance / sqrRadius);
+}
+
 // --- Kernels --- //
 [numthreads(8,8,1)]
 void Init(uint3 id : SV_DispatchThreadID) {
@@ -141,12 +153,6 @@ void Init(uint3 id : SV_DispatchThreadID) {
     if (id.y == 0) velocityMap[int2(id.x, resolution.y)] = float2(0, 0);
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
-
-    // TODO: Remove
-    if (id.x == 128 && (id.y >= 40 && id.y <= 104))
-        velocityMap[id.xy] = float2(0, 10);
-    // if (id.y == 72 && (id.x >= 50 && id.x <= 206))
-    //     velocityMap[id.xy] = float2(10, 0);
 }
 
 [numthreads(8,8,1)]
@@ -296,6 +302,25 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(8, 8, 1)]
 void HandleInput(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x + 1 && id.y >= resolution.y + 1) return;
+
+    // Set velocity
+    if (inputShouldSetVelocity) {
+        float2 weight = float2(
+            CalculateInputVelocityWeight(float2(id.x - 0.5, id.y)),
+            CalculateInputVelocityWeight(float2(id.x, id.y - 0.5))
+        );
+
+        bool isSolid = GetCellType(id.x, id.y) == CELL_TYPE_SOLID;
+        bool isSolidLeft = isSolid || (GetCellType(id.x - 1, id.y) == CELL_TYPE_SOLID);
+        bool isSolidBottom = isSolid || (GetCellType(id.x, id.y - 1) == CELL_TYPE_SOLID);
+
+        float2 dv = weight * inputVelocity;
+        dv.x *= 1 - isSolidLeft;
+        dv.y *= 1 - isSolidBottom;
+        velocityMap[id.xy] += dv;
+    }
+
     if (id.x >= resolution.x && id.y >= resolution.y) return;
 
     // Add smoke
