@@ -13,7 +13,8 @@ public class Test : MonoBehaviour {
     public int solverIterations = 15;
     public float sor = 1.7f;
     public float timeStepMultiplier = 1f;
-    public float ambientTemperature = 25f; // °C
+    public Vector2 gravity = new Vector2(0, -9.81f); // m/s^2
+    public float ambientTemperature = 25f;           // °C
     public bool isSimulationPaused = false;
 
     [Header("Velocity Settings")]
@@ -21,6 +22,11 @@ public class Test : MonoBehaviour {
 
     [Header("Smoke Settings")]
     public float smokeAmount = 0.2f;
+    public float smokeTemperature = 26f; // °C
+    public float smokeDiffusionMultiplier = 0.3f;
+    public float smokeDecayMultiplier = 1f;
+    public float temperatureDiffusionMultiplier = 1f;
+    public float temperatureDecayMultiplier = 1f;
 
     FluidSimulation simulation;
     FluidRendererManager simulationRenderer;
@@ -28,6 +34,10 @@ public class Test : MonoBehaviour {
     bool shouldRunSimulationStepOnce = false;
     bool isMouseLeftHeld = false;
     Vector2 mousePositionOld = Vector2.zero;
+
+    float CelsiusToKelvin(float temperatureCelsius) {
+        return Mathf.Max(0, temperatureCelsius + 273.15f);
+    }
 
     void Start() {
         simulation = new FluidSimulation(resolution.x, resolution.y, compute);
@@ -55,8 +65,13 @@ public class Test : MonoBehaviour {
         simulation.SOR = sor;
         simulation.TimeStepMultiplier = timeStepMultiplier;
         simulation.SolverIterations = solverIterations;
+        simulation.Gravity = gravity;
         simulation.FluidDensity = fluidDensity;
         simulation.AmbientTemperature = ambientTemperature;
+        simulation.SmokeDiffusionMultiplier = smokeDiffusionMultiplier;
+        simulation.SmokeDecayMultiplier = smokeDecayMultiplier;
+        simulation.TemperatureDiffusionMultiplier = temperatureDiffusionMultiplier;
+        simulation.TemperatureDecayMultiplier = temperatureDecayMultiplier;
     }
 
     void HandleInput() {
@@ -85,7 +100,7 @@ public class Test : MonoBehaviour {
         if (isMouseRightHeld) {
             Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
             simulation.GridManager.AddSmokeAtPosition(cellCenter, mouseInputRadius, smokeAmount,
-                                                      simulationRenderer.smokeColor);
+                                                      simulationRenderer.smokeColor, CelsiusToKelvin(smokeTemperature));
         }
 
         simulationRenderer.inputRadius = Mathf.Max(0, simulationRenderer.inputRadius + mouseScrollDelta * 0.1f);

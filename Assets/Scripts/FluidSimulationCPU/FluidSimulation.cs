@@ -127,7 +127,6 @@ public class FluidSimulation {
     void UpdateGridParameters() {
         grid.Density = fluidDensity;
         grid.AmbientTemperature = ambientTemperature;
-        grid.AmbientTemperature = ambientTemperature;
         grid.SmokeBuoyancyMultiplier = smokeBuoyancyMultiplier;
         grid.TemperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
     }

@@ -14,6 +14,7 @@ public class FluidRendererManager : MonoBehaviour {
         Velocity,
         Divergence,
         Pressure,
+        Temperature,
         Smoke,
     }
 
@@ -56,6 +57,11 @@ public class FluidRendererManager : MonoBehaviour {
     public Color negativePressureColor = new Color(0.3f, 1f, 0.3f, 1f);
     public Color positivePressureColor = new Color(0.7f, 0.3f, 0.7f, 1f);
 
+    [Header("Temperature")]
+    public float temperatureDisplayRange = 1f;
+    public Color negativeTemperatureColor = new Color(0f, 0f, 1f, 1f);
+    public Color positiveTemperatureColor = new Color(1f, 0f, 0f, 1f);
+
     [Header("Smoke")]
     public float smokeDisplayRange = 1f;
     public Color smokeColor = new Color(1f, 1f, 1f, 1f);
@@ -92,7 +98,7 @@ public class FluidRendererManager : MonoBehaviour {
         material.SetInteger("velocityChannel", (int)velocityChannel);
         material.SetFloat("velocityDisplayRange", velocityDisplayRange);
 
-        // Pressure
+        // Divergence
         material.SetFloat("divergenceDisplayRange", divergenceDisplayRange);
         material.SetVector("negativeDivergenceColor", negativeDivergenceColor);
         material.SetVector("positiveDivergenceColor", positiveDivergenceColor);
@@ -102,6 +108,11 @@ public class FluidRendererManager : MonoBehaviour {
         material.SetFloat("pressureDisplayRange", pressureDisplayRange);
         material.SetVector("negativePressureColor", negativePressureColor);
         material.SetVector("positivePressureColor", positivePressureColor);
+
+        // Temperature
+        material.SetFloat("temperatureDisplayRange", temperatureDisplayRange);
+        material.SetVector("negativeTemperatureColor", negativeTemperatureColor);
+        material.SetVector("positiveTemperatureColor", positiveTemperatureColor);
 
         // Smoke
         material.SetTexture("smokeMap", grid.smokeMap);

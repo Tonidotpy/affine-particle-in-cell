@@ -12,6 +12,7 @@ public class FluidGridManager {
         VelocityAdvectionReadback,
         AdvectSmoke,
         SmokeAdvectionReadback,
+        AddBuoyancyForce,
         PreparePressureSolver,
         RunPressureSolver,
         UpdateVelocities,
@@ -42,9 +43,14 @@ public class FluidGridManager {
     public readonly Vector2Int resolution = new(50, 35);
 
     public float sorMultiplier = 1.7f;
-    public float density = 1.3f;            // kg/m^2
-    public float ambientTemperature = 300f; // K
-    public float smokeBuoyancyMultiplier = 0.3f;
+    public Vector2 gravity = new Vector2(0, -9.81f); // m/s^2
+    public float density = 1.3f;                     // kg/m^2
+    public float ambientTemperature = 300f;          // K
+    public float smokeDiffusionMultiplier = 1.2f;
+    public float smokeDecayMultiplier = 0.05f;
+    public float smokeBuoyancyMultiplier = 1f;
+    public float temperatureDiffusionMultiplier = 1.2f;
+    public float temperatureDecayMultiplier = 0.05f;
     public float temperatureBuoyancyMultiplier = 1f;
 
     public RenderTexture debugMap;
@@ -136,8 +142,24 @@ public class FluidGridManager {
     /// <param name="dt">Time difference between two simulation steps in seconds</param>
     public void AdvectSmoke(float dt) {
         compute.SetFloat("dt", dt);
+        compute.SetFloat("smokeDiffusionMultiplier", smokeDiffusionMultiplier);
+        compute.SetFloat("smokeDecayMultiplier", smokeDecayMultiplier);
+        compute.SetFloat("temperatureDiffusionMultiplier", temperatureDiffusionMultiplier);
+        compute.SetFloat("temperatureDecayMultiplier", temperatureDecayMultiplier);
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.AdvectSmoke);
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.SmokeAdvectionReadback);
+    }
+
+    /// <summary>
+    /// Add buoyancy force to the fluid
+    /// </summary>
+    /// <param name="dt">Time difference between two simulation steps in seconds</param>
+    public void AddBuoyancyForce(float dt) {
+        compute.SetFloat("dt", dt);
+        compute.SetVector("gravity", gravity);
+        compute.SetFloat("smokeBuoyancyMultiplier", smokeBuoyancyMultiplier);
+        compute.SetFloat("temperatureBuoyancyMultiplier", temperatureBuoyancyMultiplier);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.AddBuoyancyForce);
     }
 
     /// <summary>
@@ -184,12 +206,14 @@ public class FluidGridManager {
     /// <param name="radius">Radius of the circle where the smoke is added</param>
     /// <param name="amount">Amount of smoke to add</param>
     /// <param name="color">Smoke color</param>
-    public void AddSmokeAtPosition(Vector2 center, float radius, float amount, Color color) {
+    /// <param name="temperature">Smoke temperature in K</param>
+    public void AddSmokeAtPosition(Vector2 center, float radius, float amount, Color color, float temperature) {
         compute.SetBool("inputShouldAddSmoke", true);
         compute.SetVector("inputSmokePosition", center);
         compute.SetFloat("inputSmokeRadius", radius);
         compute.SetFloat("inputSmokeAmount", amount);
         compute.SetVector("inputSmokeColor", color);
+        compute.SetFloat("inputSmokeTemperature", temperature);
     }
 
     public void HandleInput() {

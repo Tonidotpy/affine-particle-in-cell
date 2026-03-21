@@ -152,15 +152,21 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.Test
   compute: {fileID: 7200000, guid: 8e2415becaf70d38db1062178773686c, type: 3}
-  resolution: {x: 256, y: 144}
+  resolution: {x: 288, y: 144}
   fluidDensity: 1.3
   solverIterations: 30
   sor: 1.7
   timeStepMultiplier: 1
+  gravity: {x: 0, y: -9.81}
   ambientTemperature: 25
   isSimulationPaused: 1
   velocityMultiplier: 5
   smokeAmount: 0.2
+  smokeTemperature: 26
+  smokeDiffusionMultiplier: 1.2
+  smokeDecayMultiplier: 0.05
+  temperatureDiffusionMultiplier: 1
+  temperatureDecayMultiplier: 0.3
 --- !u!4 &1407357499
 Transform:
   m_ObjectHideFlags: 0
@@ -202,6 +208,9 @@ MonoBehaviour:
   pressureDisplayRange: 1
   negativePressureColor: {r: 0.3, g: 1, b: 0.3, a: 1}
   positivePressureColor: {r: 0.7, g: 0.3, b: 0.7, a: 1}
+  temperatureDisplayRange: 0.001
+  negativeTemperatureColor: {r: 0, g: 0, b: 1, a: 1}
+  positiveTemperatureColor: {r: 1, g: 0, b: 0, a: 1}
   smokeDisplayRange: 1
   smokeColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!23 &1407357502

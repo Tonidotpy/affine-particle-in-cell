@@ -21,7 +21,8 @@ Shader "Unlit/FluidRenderer" {
 #define VISUALIZATION_MODE_VELOCITY (1)
 #define VISUALIZATION_MODE_DIVERGENCE (2)
 #define VISUALIZATION_MODE_PRESSURE (3)
-#define VISUALIZATION_MODE_SMOKE (4)
+#define VISUALIZATION_MODE_TEMPERATURE (4)
+#define VISUALIZATION_MODE_SMOKE (5)
 
             struct appdata {
                 float4 vertex : POSITION;
@@ -52,6 +53,11 @@ Shader "Unlit/FluidRenderer" {
             float pressureDisplayRange;
             fixed4 negativePressureColor;
             fixed4 positivePressureColor;
+
+            // Temperature
+            float temperatureDisplayRange;
+            fixed4 negativeTemperatureColor;
+            fixed4 positiveTemperatureColor;
 
             // Smoke
             sampler2D smokeMap;
@@ -99,6 +105,12 @@ Shader "Unlit/FluidRenderer" {
                 return fixed4(col.rgb * abs(pressure * pressureDisplayRange), col.a);
             }
 
+            fixed4 RenderTemperature(v2f i) {
+                float temperature = tex2D(smokeMap, i.uv).a;
+                fixed4 col = temperature < 0 ? negativeTemperatureColor : positiveTemperatureColor;
+                return fixed4(col.rgb * abs(temperature * temperatureDisplayRange), col.a);
+            }
+
             fixed4 RenderSmoke(v2f i) {
                 float3 smoke = tex2D(smokeMap, i.uv).rgb;
                 return fixed4(smoke * abs(smoke * smokeDisplayRange), 1);
@@ -115,6 +127,8 @@ Shader "Unlit/FluidRenderer" {
                     col = RenderDivergence(i);
                 else if (visualizationMode == VISUALIZATION_MODE_PRESSURE)
                     col = RenderPressure(i);
+                else if (visualizationMode == VISUALIZATION_MODE_TEMPERATURE)
+                    col = RenderTemperature(i);
                 else if (visualizationMode == VISUALIZATION_MODE_SMOKE)
                     col = RenderSmoke(i);
                 return col;

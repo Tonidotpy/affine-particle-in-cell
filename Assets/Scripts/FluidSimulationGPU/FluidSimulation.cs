@@ -6,8 +6,13 @@ namespace FluidSimulationGPU {
 /// </summary>
 public class FluidSimulation {
     FluidGridManager gridManager;
-    float fluidDensity = 1.3f;       // kg/m^2
-    float ambientTemperature = 300f; // K
+    Vector2 gravity = new Vector2(0, -9.81f); // m/s^2
+    float fluidDensity = 1.3f;                // kg/m^2
+    float ambientTemperature = 300f;          // K
+    float smokeDiffusionMultiplier = 0.3f;
+    float smokeDecayMultiplier = 1f;
+    float temperatureDiffusionMultiplier = 1f;
+    float temperatureDecayMultiplier = 1f;
 
     /// <summary>
     /// Simulation time step in seconds
@@ -50,6 +55,14 @@ public class FluidSimulation {
     }
 
     /// <summary>
+    /// Acceleration to apply to the whole fluid [m/s^2]
+    /// </summary>
+    public Vector2 Gravity {
+        get { return gravity; }
+        set { gravity = value; }
+    }
+
+    /// <summary>
     /// Density of the fluid in [kg/m^2]
     /// </summary>
     public float FluidDensity {
@@ -63,6 +76,38 @@ public class FluidSimulation {
     public float AmbientTemperature {
         get { return ambientTemperature - 273.15f; }
         set { ambientTemperature = Mathf.Max(value + 273.15f, 0); }
+    }
+
+    /// <summary>
+    /// Smoke diffusion multiplier
+    /// </summary>
+    public float SmokeDiffusionMultiplier {
+        get { return smokeDiffusionMultiplier; }
+        set { smokeDiffusionMultiplier = Mathf.Max(value, 0); }
+    }
+
+    /// <summary>
+    /// Smoke decay multiplier
+    /// </summary>
+    public float SmokeDecayMultiplier {
+        get { return smokeDecayMultiplier; }
+        set { smokeDecayMultiplier = Mathf.Max(value, 0); }
+    }
+
+    /// <summary>
+    /// Temperature diffusion multiplier
+    /// </summary>
+    public float TemperatureDiffusionMultiplier {
+        get { return temperatureDiffusionMultiplier; }
+        set { temperatureDiffusionMultiplier = Mathf.Max(value, 0); }
+    }
+
+    /// <summary>
+    /// Temperature decay multiplier
+    /// </summary>
+    public float TemperatureDecayMultiplier {
+        get { return temperatureDecayMultiplier; }
+        set { temperatureDecayMultiplier = Mathf.Max(value, 0); }
     }
 
     public FluidSimulation(int gridWidth, int gridHeight, ComputeShader gridCompute) {
@@ -79,6 +124,8 @@ public class FluidSimulation {
         gridManager.AdvectVelocities(timeStep);
         gridManager.AdvectSmoke(timeStep);
 
+        gridManager.AddBuoyancyForce(timeStep);
+
         gridManager.SolvePressure(solverIterations, timeStep);
         gridManager.UpdateVelocities(timeStep);
     }
@@ -94,6 +141,10 @@ public class FluidSimulation {
     void UpdateGridSettings() {
         gridManager.density = fluidDensity;
         gridManager.ambientTemperature = ambientTemperature;
+        gridManager.smokeDiffusionMultiplier = smokeDiffusionMultiplier;
+        gridManager.smokeDecayMultiplier = smokeDecayMultiplier;
+        gridManager.temperatureDiffusionMultiplier = temperatureDiffusionMultiplier;
+        gridManager.temperatureDecayMultiplier = temperatureDecayMultiplier;
     }
 }
 }

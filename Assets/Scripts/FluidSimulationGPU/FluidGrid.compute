@@ -3,6 +3,7 @@
 #pragma kernel VelocityAdvectionReadback
 #pragma kernel AdvectSmoke
 #pragma kernel SmokeAdvectionReadback
+#pragma kernel AddBuoyancyForce
 #pragma kernel PreparePressureSolver
 #pragma kernel RunPressureSolver
 #pragma kernel UpdateVelocities
@@ -29,16 +30,24 @@ struct PressureSolverData {
 // --- Settings --- //
 const uint2 resolution;
 const float dt; // s
+const float2 gravity; // m/s^2
 const float density; // kg/m^2
 const float sor;
 const uint solverPassIndex;
 const float ambientTemperature; // K
+const float smokeDiffusionMultiplier;
+const float smokeDecayMultiplier;
+const float smokeBuoyancyMultiplier;
+const float temperatureDiffusionMultiplier;
+const float temperatureDecayMultiplier;
+const float temperatureBuoyancyMultiplier;
 
 const bool inputShouldAddSmoke;
 const float2 inputSmokePosition;
 const float inputSmokeRadius;
 const float inputSmokeAmount;
 const float3 inputSmokeColor;
+const float inputSmokeTemperature;
 
 const bool inputShouldSetVelocity;
 const float2 inputVelocityPosition;
@@ -131,7 +140,7 @@ float2 RewindPos(float2 position) {
 float4 SampleSmoke(float2 position) {
     float2 uv = (position.xy + float2(0.5, 0.5)) / float2(resolution.xy);
     if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1)
-        return 0;
+        return float4(0, 0, 0, ambientTemperature);
     return smokeMapSample.SampleLevel(sampler_smokeMapSample, uv.xy, 0);
 }
 
@@ -153,6 +162,7 @@ void Init(uint3 id : SV_DispatchThreadID) {
     if (id.y == 0) velocityMap[int2(id.x, resolution.y)] = float2(0, 0);
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
+    debugMap[id.xy] = 0;
 }
 
 [numthreads(8,8,1)]
@@ -197,9 +207,42 @@ void AdvectSmoke(uint3 id : SV_DispatchThreadID) {
 [numthreads(8,8,1)]
 void SmokeAdvectionReadback(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
-    smokeMap[id.xy] = smokeMapAdvected[id.xy];
 
-    // TODO: Temperature diffusion and decay
+    float4 center = GetCellCenterValue(smokeMapAdvected, id.x, id.y, 0);
+    float4 left = GetCellCenterValue(smokeMapAdvected, id.x - 1, id.y, 0);
+    float4 right = GetCellCenterValue(smokeMapAdvected, id.x + 1, id.y, 0);
+    float4 bottom = GetCellCenterValue(smokeMapAdvected, id.x, id.y - 1, 0);
+    float4 top = GetCellCenterValue(smokeMapAdvected, id.x, id.y + 1, 0);
+
+    float4 laplacian = ((left + right + bottom + top) - 4 * center);
+
+    // Temperature diffusion and decay
+    float temperatureNext = center.a + temperatureDiffusionMultiplier * dt * laplacian.a;
+    temperatureNext *= exp(-dt * temperatureDecayMultiplier);
+
+    // Temperature diffusion and decay
+    float3 smokeNext = center.rgb + smokeDiffusionMultiplier * dt * laplacian.rgb;
+    smokeNext *= exp(-dt * smokeDecayMultiplier);
+
+    smokeMap[id.xy] = float4(smokeNext, temperatureNext);
+}
+
+[numthreads(8,8,1)]
+void AddBuoyancyForce(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+
+    float4 smoke = SampleSmoke(id.xy);
+
+    // Hot air rises
+    float temperature = smoke.a;
+    float relativeTemperature = temperature - ambientTemperature;
+    float2 buoyancyForceTemperature = (-temperatureBuoyancyMultiplier * relativeTemperature) * gravity;
+
+    // Heavy smoke sinks
+    float smokeConcentration = dot(smoke.rgb, 1) / 3;
+    float2 buoyancyForceSmoke = (smokeBuoyancyMultiplier * smokeConcentration) * gravity;
+
+    velocityMap[id.xy] += (buoyancyForceTemperature + buoyancyForceTemperature) * dt;
 }
 
 [numthreads(8,8,1)]
@@ -311,9 +354,9 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
             CalculateInputVelocityWeight(float2(id.x, id.y - 0.5))
         );
 
-        bool isSolid = GetCellType(id.x, id.y) == CELL_TYPE_SOLID;
-        bool isSolidLeft = isSolid || (GetCellType(id.x - 1, id.y) == CELL_TYPE_SOLID);
-        bool isSolidBottom = isSolid || (GetCellType(id.x, id.y - 1) == CELL_TYPE_SOLID);
+        int isSolid = GetCellType(id.x, id.y) == CELL_TYPE_SOLID;
+        int isSolidLeft = isSolid || (GetCellType(id.x - 1, id.y) == CELL_TYPE_SOLID);
+        int isSolidBottom = isSolid || (GetCellType(id.x, id.y - 1) == CELL_TYPE_SOLID);
 
         float2 dv = weight * inputVelocity;
         dv.x *= 1 - isSolidLeft;
@@ -327,8 +370,10 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
     if (inputShouldAddSmoke && GetCellType(id.x, id.y) == CELL_TYPE_FLUID) {
         float d = distance(id.xy, inputSmokePosition);
         if (d <= inputSmokeRadius) {
+            float relativeTemperature = inputSmokeTemperature - ambientTemperature;
+            debugMap[id.xy] = float4(relativeTemperature, -relativeTemperature, 0, 1);
             float fallof = 1 - (d / inputSmokeRadius);
-            smokeMap[id.xy] += float4(inputSmokeColor * inputSmokeAmount * fallof, 0);
+            smokeMap[id.xy] += float4(inputSmokeColor * inputSmokeAmount * fallof, relativeTemperature);
         }
     }
 }
