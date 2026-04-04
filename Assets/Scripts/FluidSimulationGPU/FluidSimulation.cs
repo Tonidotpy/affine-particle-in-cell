@@ -11,8 +11,10 @@ public class FluidSimulation {
     float ambientTemperature = 300f;          // K
     float smokeDiffusionMultiplier = 0.3f;
     float smokeDecayMultiplier = 1f;
+    float smokeBuoyancyMultiplier = 1f;
     float temperatureDiffusionMultiplier = 1f;
     float temperatureDecayMultiplier = 1f;
+    float temperatureBuoyancyMultiplier = 1f;
 
     /// <summary>
     /// Simulation time step in seconds
@@ -95,6 +97,14 @@ public class FluidSimulation {
     }
 
     /// <summary>
+    /// Smoke buoyancy force multiplier
+    /// </summary>
+    public float SmokeBuoyancyMultiplier {
+        get { return smokeBuoyancyMultiplier; }
+        set { smokeBuoyancyMultiplier = Mathf.Max(value, 0); }
+    }
+
+    /// <summary>
     /// Temperature diffusion multiplier
     /// </summary>
     public float TemperatureDiffusionMultiplier {
@@ -110,6 +120,14 @@ public class FluidSimulation {
         set { temperatureDecayMultiplier = Mathf.Max(value, 0); }
     }
 
+    /// <summary>
+    /// Temperature buoyancy force multiplier
+    /// </summary>
+    public float TemperatureBuoyancyMultiplier {
+        get { return temperatureBuoyancyMultiplier; }
+        set { temperatureBuoyancyMultiplier = Mathf.Max(value, 0); }
+    }
+
     public FluidSimulation(int gridWidth, int gridHeight, ComputeShader gridCompute) {
         gridManager = new FluidGridManager(gridWidth, gridHeight, gridCompute);
     }
@@ -121,8 +139,8 @@ public class FluidSimulation {
         UpdateGridSettings();
         gridManager.Setup();
 
-        gridManager.AdvectVelocities(timeStep);
         gridManager.AdvectSmoke(timeStep);
+        gridManager.AdvectVelocities(timeStep);
 
         gridManager.AddBuoyancyForce(timeStep);
 
@@ -139,12 +157,15 @@ public class FluidSimulation {
     }
 
     void UpdateGridSettings() {
+        gridManager.gravity = gravity;
         gridManager.density = fluidDensity;
         gridManager.ambientTemperature = ambientTemperature;
         gridManager.smokeDiffusionMultiplier = smokeDiffusionMultiplier;
         gridManager.smokeDecayMultiplier = smokeDecayMultiplier;
+        gridManager.smokeBuoyancyMultiplier = smokeBuoyancyMultiplier;
         gridManager.temperatureDiffusionMultiplier = temperatureDiffusionMultiplier;
         gridManager.temperatureDecayMultiplier = temperatureDecayMultiplier;
+        gridManager.temperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
     }
 }
 }

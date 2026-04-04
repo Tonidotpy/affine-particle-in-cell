@@ -162,11 +162,13 @@ MonoBehaviour:
   isSimulationPaused: 1
   velocityMultiplier: 5
   smokeAmount: 0.2
-  smokeTemperature: 26
-  smokeDiffusionMultiplier: 1.2
-  smokeDecayMultiplier: 0.05
+  smokeTemperature: 30
+  smokeDiffusionMultiplier: 0.7
+  smokeDecayMultiplier: 0.08
+  smokeBuoyancyMultiplier: 0.5
   temperatureDiffusionMultiplier: 1
-  temperatureDecayMultiplier: 0.3
+  temperatureDecayMultiplier: 0
+  temperatureBuoyancyMultiplier: 0.001
 --- !u!4 &1407357499
 Transform:
   m_ObjectHideFlags: 0
@@ -195,8 +197,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.FluidRendererManager
   shader: {fileID: 4800000, guid: df9b484deacb6ce4f9279669e9b2708a, type: 3}
-  visualizationMode: 4
-  inputRadius: 15
+  visualizationMode: 0
+  inputRadius: 20
   inputColor: {r: 1, g: 1, b: 1, a: 0.3}
   inputActiveColor: {r: 0, g: 1, b: 0.1, a: 0.3}
   cellSize: 1

@@ -80,9 +80,9 @@ Shader "Unlit/FluidRenderer" {
                 float2 velocity = tex2D(velocityMap, i.uv).rg;
                 fixed4 col = fixed4(0, 0, 0, 1);
                 if (velocityChannel == VELOCITY_CHANNEL_X || velocityChannel == VELOCITY_CHANNEL_BOTH)
-                    col.r = velocity.x * abs(velocity.x * velocityDisplayRange);
+                    col.r = abs(velocity.x * velocity.x * velocityDisplayRange);
                 if (velocityChannel == VELOCITY_CHANNEL_Y || velocityChannel == VELOCITY_CHANNEL_BOTH)
-                    col.g = velocity.y * abs(velocity.y * velocityDisplayRange);
+                    col.g = abs(velocity.y * velocity.y * velocityDisplayRange);
                 return col;
             }
 

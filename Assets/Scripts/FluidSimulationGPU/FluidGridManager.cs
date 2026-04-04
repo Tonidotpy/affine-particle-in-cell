@@ -82,9 +82,9 @@ public class FluidGridManager {
                                           GraphicsFormat.R32G32B32A32_SFloat);
         ComputeHelper.CreateRenderTexture(ref cellType, resolution.x, resolution.y, FilterMode.Point,
                                           GraphicsFormat.R8_UInt);
-        ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x + 1, resolution.y + 1, FilterMode.Bilinear,
+        ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x, resolution.y, FilterMode.Bilinear,
                                           GraphicsFormat.R32G32_SFloat);
-        ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x + 1, resolution.y + 1,
+        ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x, resolution.y,
                                           FilterMode.Bilinear, GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref pressureMap, resolution.x, resolution.y, FilterMode.Bilinear,
                                           GraphicsFormat.R32_SFloat);
@@ -127,8 +127,8 @@ public class FluidGridManager {
     /// <param name="dt">Time difference between two simulation steps in seconds</param>
     public void AdvectVelocities(float dt) {
         compute.SetFloat("dt", dt);
-        ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.AdvectVelocities);
-        ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.VelocityAdvectionReadback);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.AdvectVelocities);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.VelocityAdvectionReadback);
     }
 
     /// <summary>
@@ -216,9 +216,17 @@ public class FluidGridManager {
         compute.SetFloat("inputSmokeTemperature", temperature);
     }
 
+    /// <summary>
+    /// Set all velocity values to 0
+    /// </summary>
+    public void ClearVelocities() {
+        compute.SetBool("inputShouldClearVelocity", true);
+    }
+
     public void HandleInput() {
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.HandleInput);
         compute.SetBool("inputShouldSetVelocity", false);
+        compute.SetBool("inputShouldClearVelocity", false);
         compute.SetBool("inputShouldAddSmoke", false);
     }
 

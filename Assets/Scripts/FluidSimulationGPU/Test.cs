@@ -25,8 +25,10 @@ public class Test : MonoBehaviour {
     public float smokeTemperature = 26f; // °C
     public float smokeDiffusionMultiplier = 0.3f;
     public float smokeDecayMultiplier = 1f;
+    public float smokeBuoyancyMultiplier = 1f;
     public float temperatureDiffusionMultiplier = 1f;
     public float temperatureDecayMultiplier = 1f;
+    public float temperatureBuoyancyMultiplier = 1f;
 
     FluidSimulation simulation;
     FluidRendererManager simulationRenderer;
@@ -70,8 +72,10 @@ public class Test : MonoBehaviour {
         simulation.AmbientTemperature = ambientTemperature;
         simulation.SmokeDiffusionMultiplier = smokeDiffusionMultiplier;
         simulation.SmokeDecayMultiplier = smokeDecayMultiplier;
+        simulation.SmokeBuoyancyMultiplier = smokeBuoyancyMultiplier;
         simulation.TemperatureDiffusionMultiplier = temperatureDiffusionMultiplier;
         simulation.TemperatureDecayMultiplier = temperatureDecayMultiplier;
+        simulation.TemperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
     }
 
     void HandleInput() {
@@ -89,6 +93,9 @@ public class Test : MonoBehaviour {
         }
         if (isSimulationPaused && Input.GetKeyDown(KeyCode.N)) {
             shouldRunSimulationStepOnce = true;
+        }
+        if (Input.GetKeyDown(KeyCode.C)) {
+            simulation.GridManager.ClearVelocities();
         }
 
         if (isMouseLeftHeld) {

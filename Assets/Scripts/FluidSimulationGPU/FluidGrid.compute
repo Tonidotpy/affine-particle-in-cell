@@ -18,6 +18,7 @@ static const uint FLOW_LEFT_BIT_POS = 28;
 static const uint CELL_TYPE_SOLID = 0;
 static const uint CELL_TYPE_FLUID = 1;
 
+static const uint AXIS_ALL = -1;
 static const uint AXIS_X = 0;
 static const uint AXIS_Y = 1;
 
@@ -50,6 +51,7 @@ const float3 inputSmokeColor;
 const float inputSmokeTemperature;
 
 const bool inputShouldSetVelocity;
+const bool inputShouldClearVelocity;
 const float2 inputVelocityPosition;
 const float inputVelocityRadius;
 const float2 inputVelocity;
@@ -89,21 +91,6 @@ float GetPressure(int i, int j) {
     return GetCellCenterValue(pressureMap, i, j, 0);
 }
 
-float GetVelocity(RWTexture2D<float2> velocity, float x, float y, uint axis) {
-    float xOff = axis == AXIS_X ? 0.5 : 0;
-    float yOff = axis == AXIS_Y ? 0.5 : 0;
-    int w = resolution.x;
-    int h = resolution.y;
-    int i = round(x + xOff);
-    int j = round(y + yOff);
-
-    bool xBoundsCheck = axis == AXIS_X && (i >= 0 && i < w + 1 && j >= 0 && j < h);
-    bool yBoundsCheck = axis == AXIS_Y && (i >= 0 && i < w && j >= 0 && j < h + 1);
-    if (!xBoundsCheck && !yBoundsCheck)
-        return 0;
-    return axis == AXIS_X ? velocity[uint2(i, j)].x : velocity[uint2(i, j)].y;
-}
-
 uint2 GetCheckerboardCellCoordinates(uint index, uint passIndex, uint2 resolution) {
     uint i = index * 2 + passIndex;
     uint x = i % resolution.x;
@@ -121,12 +108,15 @@ uint2 GetCheckerboardCellCoordinates(uint index, uint passIndex, uint2 resolutio
 }
 
 float2 SampleVelocity(float2 position) {
+    // float2(0.5, 0.5) is added to the position because the textures origin is
+    // not at the center of the pixel but on its bottom left corner
+
     // Horizontal velocity
-    float2 uvX = (position - float2(-0.5, 0)) / float2(resolution.xy);
+    float2 uvX = (position.xy + float2(1, 0.5)) / float2(resolution.xy);
     float velocityX = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvX, 0).x;
 
     // Vertical velocity
-    float2 uvY = (position - float2(0, -0.5)) / float2(resolution.xy);
+    float2 uvY = (position.xy + float2(0.5, 1.0)) / float2(resolution.xy);
     float velocityY = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvY, 0).y;
 
     return float2(velocityX, velocityY);
@@ -138,7 +128,10 @@ float2 RewindPos(float2 position) {
 }
 
 float4 SampleSmoke(float2 position) {
-    float2 uv = (position.xy + float2(0.5, 0.5)) / float2(resolution.xy);
+    // float2(0.5, 0.5) is added to the position because the textures origin is
+    // not at the center of the pixel but on its bottom left corner
+
+    float2 uv = (position.xy + 0.5) / float2(resolution.xy);
     if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1)
         return float4(0, 0, 0, ambientTemperature);
     return smokeMapSample.SampleLevel(sampler_smokeMapSample, uv.xy, 0);
@@ -151,15 +144,17 @@ float CalculateInputVelocityWeight(float2 position) {
     return 1.0 - saturate(sqrDistance / sqrRadius);
 }
 
+uint2 ClampCoordinates(uint2 index) {
+    return clamp(index, 0, resolution - float2(1, 1));
+}
+
 // --- Kernels --- //
 [numthreads(8,8,1)]
 void Init(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
     cellType[id.xy] = CELL_TYPE_FLUID;
-    velocityMap[id.xy] = float2(0, 0);
-    if (id.x == 0) velocityMap[int2(resolution.x, id.y)] = float2(0, 0);
-    if (id.y == 0) velocityMap[int2(id.x, resolution.y)] = float2(0, 0);
+    velocityMap[id.xy] = 0;
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
     debugMap[id.xy] = 0;
@@ -167,21 +162,23 @@ void Init(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(8,8,1)]
 void AdvectVelocities(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= resolution.x + 1 || id.y >= resolution.y + 1) return;
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
 
     if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
+        // TODO: Never called without obstacles, check correctness after adding them
         velocityMapAdvected[id.xy] = velocityMapSample[id.xy];
         return;
     }
 
+    // TODO: Check behaviour with fluid to solid edges
     uint flowLeft = GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID;
     uint flowBottom = GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID;
 
     float2 v = velocityMapSample[id.xy];
     float2 positionPrevLeft = RewindPos(float2(id.x - 0.5, id.y));
     float2 positionPrevBottom = RewindPos(float2(id.x, id.y - 0.5));
-    v.x = flowLeft ? SampleVelocity(positionPrevLeft).x : v.x;
-    v.y = flowBottom ? SampleVelocity(positionPrevBottom).y : v.y;
+    v.x = flowLeft ? SampleVelocity(positionPrevLeft).x : 0;
+    v.y = flowBottom ? SampleVelocity(positionPrevBottom).y : 0;
 
     // Update velocities
     velocityMapAdvected[id.xy] = v;
@@ -189,7 +186,7 @@ void AdvectVelocities(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(8,8,1)]
 void VelocityAdvectionReadback(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= resolution.x + 1 || id.y >= resolution.y + 1) return;
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
     velocityMap[id.xy] = velocityMapAdvected[id.xy];
 }
 
@@ -197,10 +194,8 @@ void VelocityAdvectionReadback(uint3 id : SV_DispatchThreadID) {
 void AdvectSmoke(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    float2 positionPrev = RewindPos(float2(id.xy));
+    float2 positionPrev = RewindPos(id.xy);
     float4 smoke = SampleSmoke(positionPrev);
-
-    // Update smoke
     smokeMapAdvected[id.xy] = smoke;
 }
 
@@ -208,11 +203,12 @@ void AdvectSmoke(uint3 id : SV_DispatchThreadID) {
 void SmokeAdvectionReadback(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    float4 center = GetCellCenterValue(smokeMapAdvected, id.x, id.y, 0);
-    float4 left = GetCellCenterValue(smokeMapAdvected, id.x - 1, id.y, 0);
-    float4 right = GetCellCenterValue(smokeMapAdvected, id.x + 1, id.y, 0);
-    float4 bottom = GetCellCenterValue(smokeMapAdvected, id.x, id.y - 1, 0);
-    float4 top = GetCellCenterValue(smokeMapAdvected, id.x, id.y + 1, 0);
+    float4 defaultValue = float4(0, 0, 0, ambientTemperature);
+    float4 center = GetCellCenterValue(smokeMapAdvected, id.x, id.y, defaultValue);
+    float4 left = GetCellCenterValue(smokeMapAdvected, id.x - 1, id.y, defaultValue);
+    float4 right = GetCellCenterValue(smokeMapAdvected, id.x + 1, id.y, defaultValue);
+    float4 bottom = GetCellCenterValue(smokeMapAdvected, id.x, id.y - 1, defaultValue);
+    float4 top = GetCellCenterValue(smokeMapAdvected, id.x, id.y + 1, defaultValue);
 
     float4 laplacian = ((left + right + bottom + top) - 4 * center);
 
@@ -231,18 +227,25 @@ void SmokeAdvectionReadback(uint3 id : SV_DispatchThreadID) {
 void AddBuoyancyForce(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    float4 smoke = SampleSmoke(id.xy);
+    float4 smokeLeft = SampleSmoke(id.xy - float2(0.5, 0));
+    float4 smokeBottom = SampleSmoke(id.xy - float2(0, 0.5));
 
-    // Hot air rises
-    float temperature = smoke.a;
-    float relativeTemperature = temperature - ambientTemperature;
-    float2 buoyancyForceTemperature = (-temperatureBuoyancyMultiplier * relativeTemperature) * gravity;
+    // Buoyancy effect of temperature
+    float2 relativeTemperature = float2(smokeLeft.a, smokeBottom.a) - ambientTemperature;
+    float2 buoyancyTemperature = temperatureBuoyancyMultiplier * relativeTemperature;
 
-    // Heavy smoke sinks
-    float smokeConcentration = dot(smoke.rgb, 1) / 3;
-    float2 buoyancyForceSmoke = (smokeBuoyancyMultiplier * smokeConcentration) * gravity;
+    // Buoyancy effect of smoke concentration
+    float2 smokeConcentration = float2(dot(smokeLeft.rgb, 1) / 3.0, dot(smokeBottom.rgb, 1) / 3.0);
+    float2 buoyancySmoke = smokeBuoyancyMultiplier * smokeConcentration;
 
-    velocityMap[id.xy] += (buoyancyForceTemperature + buoyancyForceTemperature) * dt;
+    bool isFluid = cellType[id.xy] == CELL_TYPE_FLUID;
+    uint flowBottom = isFluid && (GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID);
+    uint flowLeft = isFluid && (GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID);
+
+    float2 v = (buoyancySmoke - buoyancyTemperature) * gravity * dt;
+    v.x = flowLeft ? v.x : 0;
+    v.y = flowBottom ? v.y : 0;
+    velocityMap[id.xy] += v;
 }
 
 [numthreads(8,8,1)]
@@ -265,11 +268,10 @@ void PreparePressureSolver(uint3 id : SV_DispatchThreadID) {
     flow |= (flowLeft & 1) << FLOW_LEFT_BIT_POS;
 
     // debugMap[id.xy] = float4(flowTop - flowBottom, flowRight - flowLeft, 0, 1);
-
-    float velocityTop = GetVelocity(velocityMap, id.x, id.y + 0.5, AXIS_Y);
-    float velocityBottom = GetVelocity(velocityMap, id.x, id.y - 0.5, AXIS_Y);
-    float velocityRight = GetVelocity(velocityMap, id.x + 0.5, id.y, AXIS_X);
-    float velocityLeft = GetVelocity(velocityMap, id.x - 0.5, id.y, AXIS_X);
+    float velocityLeft = velocityMap[ClampCoordinates(id.xy)].x;
+    float velocityBottom = velocityMap[ClampCoordinates(id.xy)].y;
+    float velocityRight = velocityMap[ClampCoordinates(uint2(id.x + 1, id.y))].x;
+    float velocityTop = velocityMap[ClampCoordinates(uint2(id.x, id.y + 1))].y;
     float k = density / dt;
     float velocityTerm = (flowEdgeCount == 0) ?
         0 :
@@ -320,7 +322,7 @@ void RunPressureSolver(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(8, 8, 1)]
 void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= resolution.x + 1 || id.y >= resolution.y + 1) return;
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
 
     if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
         velocityMap[id.xy] = float2(0, 0);
@@ -345,7 +347,7 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(8, 8, 1)]
 void HandleInput(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= resolution.x + 1 && id.y >= resolution.y + 1) return;
+    if (id.x >= resolution.x && id.y >= resolution.y) return;
 
     // Set velocity
     if (inputShouldSetVelocity) {
@@ -364,16 +366,19 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
         velocityMap[id.xy] += dv;
     }
 
-    if (id.x >= resolution.x && id.y >= resolution.y) return;
-
     // Add smoke
     if (inputShouldAddSmoke && GetCellType(id.x, id.y) == CELL_TYPE_FLUID) {
         float d = distance(id.xy, inputSmokePosition);
         if (d <= inputSmokeRadius) {
             float relativeTemperature = inputSmokeTemperature - ambientTemperature;
-            debugMap[id.xy] = float4(relativeTemperature, -relativeTemperature, 0, 1);
+            // debugMap[id.xy] = float4(relativeTemperature, -relativeTemperature, 0, 1);
             float fallof = 1 - (d / inputSmokeRadius);
             smokeMap[id.xy] += float4(inputSmokeColor * inputSmokeAmount * fallof, relativeTemperature);
         }
+    }
+
+    // Clear velocities
+    if (inputShouldClearVelocity) {
+        velocityMap[id.xy] = 0;
     }
 }
