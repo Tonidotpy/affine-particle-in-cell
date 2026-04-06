@@ -16,7 +16,7 @@ public class FluidGridManager {
         PreparePressureSolver,
         RunPressureSolver,
         UpdateVelocities,
-        HandleInput,
+        HandleInput
     }
 
     /// <summary>
@@ -174,7 +174,7 @@ public class FluidGridManager {
         compute.SetFloat("sor", sorMultiplier);
 
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.PreparePressureSolver);
-        for (int i = 0; i < iterations; ++i) {
+        for (int i = 0; i < iterations * 2; ++i) {
             compute.SetFloat("solverPassIndex", i % 2);
             ComputeHelper.Dispatch(compute, resolution.x * resolution.y / 2, ComputeKernel.RunPressureSolver);
         }
@@ -223,6 +223,9 @@ public class FluidGridManager {
         compute.SetBool("inputShouldClearVelocity", true);
     }
 
+    /// <summary>
+    /// Handle user input
+    /// </summary>
     public void HandleInput() {
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.HandleInput);
         compute.SetBool("inputShouldSetVelocity", false);
