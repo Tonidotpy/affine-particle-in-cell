@@ -112,11 +112,11 @@ float2 SampleVelocity(float2 position) {
     // not at the center of the pixel but on its bottom left corner
 
     // Horizontal velocity
-    float2 uvX = (position.xy + float2(1, 0.5)) / float2(resolution.xy);
+    float2 uvX = saturate((position.xy + float2(1, 0.5)) / float2(resolution.xy));
     float velocityX = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvX, 0).x;
 
     // Vertical velocity
-    float2 uvY = (position.xy + float2(0.5, 1.0)) / float2(resolution.xy);
+    float2 uvY = saturate((position.xy + float2(0.5, 1.0)) / float2(resolution.xy));
     float velocityY = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvY, 0).y;
 
     return float2(velocityX, velocityY);
@@ -131,9 +131,7 @@ float4 SampleSmoke(float2 position) {
     // float2(0.5, 0.5) is added to the position because the textures origin is
     // not at the center of the pixel but on its bottom left corner
 
-    float2 uv = (position.xy + 0.5) / float2(resolution.xy);
-    if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1)
-        return float4(0, 0, 0, ambientTemperature);
+    float2 uv = saturate((position.xy + 0.5) / float2(resolution.xy));
     return smokeMapSample.SampleLevel(sampler_smokeMapSample, uv.xy, 0);
 }
 
@@ -158,6 +156,9 @@ void Init(uint3 id : SV_DispatchThreadID) {
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
     debugMap[id.xy] = 0;
+
+    if (dot(id.xy - 4, id.xy - 4) < 2)
+        velocityMap[id.xy] = 10;
 }
 
 [numthreads(8,8,1)]
@@ -166,7 +167,7 @@ void AdvectVelocities(uint3 id : SV_DispatchThreadID) {
 
     if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
         // TODO: Never called without obstacles, check correctness after adding them
-        velocityMapAdvected[id.xy] = velocityMapSample[id.xy];
+        velocityMapAdvected[id.xy] = 0;
         return;
     }
 
@@ -242,42 +243,43 @@ void AddBuoyancyForce(uint3 id : SV_DispatchThreadID) {
     uint flowBottom = isFluid && (GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID);
     uint flowLeft = isFluid && (GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID);
 
-    float2 v = (buoyancySmoke - buoyancyTemperature) * gravity * dt;
-    v.x = flowLeft ? v.x : 0;
-    v.y = flowBottom ? v.y : 0;
-    velocityMap[id.xy] += v;
+    float2 dv = (buoyancySmoke - buoyancyTemperature) * gravity * dt;
+    dv.x = flowLeft ? dv.x : 0;
+    dv.y = flowBottom ? dv.y : 0;
+    velocityMap[id.xy] += dv;
 }
 
 [numthreads(8,8,1)]
 void PreparePressureSolver(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    bool isSolid = cellType[id.xy] != CELL_TYPE_FLUID;
-    uint flowTop = 1 - (isSolid | (GetCellType(id.x, id.y + 1) != CELL_TYPE_FLUID));
-    uint flowBottom = 1 - (isSolid | (GetCellType(id.x, id.y - 1) != CELL_TYPE_FLUID));
-    uint flowRight= 1 - (isSolid | (GetCellType(id.x + 1, id.y) != CELL_TYPE_FLUID));
-    uint flowLeft = 1 - (isSolid | (GetCellType(id.x - 1, id.y) != CELL_TYPE_FLUID));
+    bool isFluid = cellType[id.xy] == CELL_TYPE_FLUID;
+    uint flowLeft = isFluid && (GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID);
+    uint flowBottom = isFluid && (GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID);
+    uint flowRight= isFluid && (GetCellType(id.x + 1, id.y) == CELL_TYPE_FLUID);
+    uint flowTop = isFluid && (GetCellType(id.x, id.y + 1) == CELL_TYPE_FLUID);
     uint flowEdgeCount = flowTop + flowBottom + flowRight + flowLeft;
     // BUG: Apparently chaining all OR (|) operations into a single line
     // causes the compiler to optimize too aggresively resulting in broken
     // code that execute unexpectedly
     uint flow = flowEdgeCount & 0xff;
-    flow |= (flowTop & 1) << FLOW_TOP_BIT_POS;
+    flow |= (flowLeft & 1) << FLOW_LEFT_BIT_POS;
     flow |= (flowBottom & 1) << FLOW_BOTTOM_BIT_POS;
     flow |= (flowRight & 1) << FLOW_RIGHT_BIT_POS;
-    flow |= (flowLeft & 1) << FLOW_LEFT_BIT_POS;
+    flow |= (flowTop & 1) << FLOW_TOP_BIT_POS;
 
     // debugMap[id.xy] = float4(flowTop - flowBottom, flowRight - flowLeft, 0, 1);
-    float velocityLeft = velocityMap[ClampCoordinates(id.xy)].x;
-    float velocityBottom = velocityMap[ClampCoordinates(id.xy)].y;
-    float velocityRight = velocityMap[ClampCoordinates(uint2(id.x + 1, id.y))].x;
-    float velocityTop = velocityMap[ClampCoordinates(uint2(id.x, id.y + 1))].y;
+    float velocityLeft = velocityMap[id.xy].x;
+    float velocityBottom = velocityMap[id.xy].y;
+    float velocityRight = IsInCellCenterBounds(id.x + 1, id.y) ? velocityMap[id.xy + uint2(1, 0)].x : 0;
+    float velocityTop = IsInCellCenterBounds(id.x, id.y + 1) ? velocityMap[id.xy + uint2(0, 1)].y : 0;
     float k = density / dt;
     float velocityTerm = (flowEdgeCount == 0) ?
         0 :
         (velocityTop - velocityBottom + velocityRight - velocityLeft) / k;
 
-    // debugMap[id.xy] = float4(velocityTop - velocityBottom, velocityBottom - velocityTop, velocityTerm, 1);
+    // float divergence = velocityTop - velocityBottom + velocityRight - velocityLeft;
+    // debugMap[id.xy] = float4(divergence, 0, -divergence, 1);
 
     uint index = id.y * resolution.x + id.x;
     pressureSolverData[index].flowData = flow;
@@ -293,10 +295,10 @@ void RunPressureSolver(uint3 id : SV_DispatchThreadID) {
 
     uint index = cell.y * resolution.x + cell.x;
     uint flow = pressureSolverData[index].flowData;
-    uint flowTop = (flow >> FLOW_TOP_BIT_POS) & 1;
+    uint flowLeft = (flow >> FLOW_LEFT_BIT_POS) & 1;
     uint flowBottom = (flow >> FLOW_BOTTOM_BIT_POS) & 1;
     uint flowRight = (flow >> FLOW_RIGHT_BIT_POS) & 1;
-    uint flowLeft = (flow >> FLOW_LEFT_BIT_POS) & 1;
+    uint flowTop = (flow >> FLOW_TOP_BIT_POS) & 1;
     uint flowEdgeCount = flow & 0xFF;
     float velocityTerm = pressureSolverData[index].velocityTerm;
 
@@ -307,10 +309,10 @@ void RunPressureSolver(uint3 id : SV_DispatchThreadID) {
         return;
     }
 
-    float pressureTop = GetPressure(cell.x, cell.y + 1) * flowTop;
+    float pressureLeft = GetPressure(cell.x - 1, cell.y) * flowLeft;
     float pressureBottom = GetPressure(cell.x, cell.y - 1) * flowBottom;
     float pressureRight = GetPressure(cell.x + 1, cell.y) * flowRight;
-    float pressureLeft = GetPressure(cell.x - 1, cell.y) * flowLeft;
+    float pressureTop = GetPressure(cell.x, cell.y + 1) * flowTop;
     float pressureSum = pressureTop + pressureBottom + pressureRight + pressureLeft;
 
     // debugMap[cell] = float4(abs(pressureTop - pressureBottom) * 10, abs(pressureRight - pressureLeft) * 10, 0, 1);
@@ -325,7 +327,7 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
     if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
-        velocityMap[id.xy] = float2(0, 0);
+        velocityMap[id.xy] = 0;
         return;
     }
 
@@ -347,7 +349,7 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(8, 8, 1)]
 void HandleInput(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= resolution.x && id.y >= resolution.y) return;
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
 
     // Set velocity
     if (inputShouldSetVelocity) {
