@@ -140,7 +140,8 @@ public class FluidRenderer : MonoBehaviour {
         Draw.Point(mousePosition, inputRadius, isMousePressed ? inputActiveColor : inputColor);
 
         Draw.StartLayerIfNotInMatching(Vector2.zero, 1, true);
-        Draw.Text(FontType.JetbrainsMonoRegular, $"Mode: {visualizationMode}", 20f, new Vector2(30f, Screen.height - 20f), Anchor.TopLeft, Color.white);
+        Draw.Text(FontType.JetbrainsMonoRegular, $"Mode: {visualizationMode}", 20f,
+                  new Vector2(30f, Screen.height - 20f), Anchor.TopLeft, Color.white);
     }
 
     /// <summary>
@@ -164,51 +165,53 @@ public class FluidRenderer : MonoBehaviour {
         Vector2 pos = CellCenterToWorld(i, j);
 
         switch (grid.cellType[i, j]) {
-            case FluidGridMac.CellType.Solid:
-                col = Color.orange;
-                break;
+        case FluidGridMac.CellType.Solid:
+            col = Color.orange;
+            break;
         }
 
         switch (visualizationMode) {
-            case VisualizationMode.VelocityMap:
-                if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
-                    break;
-                Vector2 velocity = grid.SampleVelocity(new Vector2(i, j));
-                float velocityT = Mathf.Clamp(velocity.sqrMagnitude / velocityDisplayRange, 0, 1f);
-                col = velocityColorMap.Evaluate(velocityT);
+        case VisualizationMode.VelocityMap:
+            if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
                 break;
-            case VisualizationMode.Divergence:
-                float divergence = grid.CalculateDivergenceAtCell(i, j);
-                float divergenceT = Mathf.Abs(divergence) / divergenceDisplayRange;
-                col = Color.Lerp(col, divergence < 0 ? negativeDivergenceColor : positiveDivergenceColor, divergenceT);
-                if (showDivergenceValue)
-                    Draw.Text(FontType.JetbrainsMonoRegular, $"{divergence:0.00}", fontSize, pos, Anchor.Centre, Color.white);
+            Vector2 velocity = grid.SampleVelocity(new Vector2(i, j));
+            float velocityT = Mathf.Clamp(velocity.sqrMagnitude / velocityDisplayRange, 0, 1f);
+            col = velocityColorMap.Evaluate(velocityT);
+            break;
+        case VisualizationMode.Divergence:
+            float divergence = grid.CalculateDivergenceAtCell(i, j);
+            float divergenceT = Mathf.Abs(divergence) / divergenceDisplayRange;
+            col = Color.Lerp(col, divergence < 0 ? negativeDivergenceColor : positiveDivergenceColor, divergenceT);
+            if (showDivergenceValue)
+                Draw.Text(FontType.JetbrainsMonoRegular, $"{divergence:0.00}", fontSize, pos, Anchor.Centre,
+                          Color.white);
+            break;
+        case VisualizationMode.Pressure:
+            float pressure = grid.pressure[i, j];
+            float pressureT = Mathf.Abs(pressure) / pressureDisplayRange;
+            col = Color.Lerp(col, pressure < 0 ? negativePressureColor : positivePressureColor, pressureT);
+            if (showPressureValue)
+                Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, pos, Anchor.Centre, Color.white);
+            break;
+        case VisualizationMode.Temperature:
+            if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
                 break;
-            case VisualizationMode.Pressure:
-                float pressure = grid.pressure[i, j];
-                float pressureT = Mathf.Abs(pressure) / pressureDisplayRange;
-                col = Color.Lerp(col, pressure < 0 ? negativePressureColor : positivePressureColor, pressureT);
-                if (showPressureValue)
-                    Draw.Text(FontType.JetbrainsMonoRegular, $"{pressure:0.00}", fontSize, pos, Anchor.Centre, Color.white);
+            float temperatureDegrees = grid.temperature[i, j] - 273.15f;
+            float temperatureT = Mathf.Abs(temperatureDegrees) / temperatureDisplayRange;
+            col = Color.Lerp(col, temperatureDegrees < 0 ? coldTemperatureColor : hotTemperatureColor, temperatureT);
+            if (showTemperatureValue)
+                Draw.Text(FontType.JetbrainsMonoRegular, $"{temperatureDegrees:0.00}", fontSize, pos, Anchor.Centre,
+                          Color.white);
+            break;
+        case VisualizationMode.Smoke:
+            if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
                 break;
-            case VisualizationMode.Temperature:
-                if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
-                    break;
-                float temperatureDegrees = grid.temperature[i, j] - 273.15f;
-                float temperatureT = Mathf.Abs(temperatureDegrees) / temperatureDisplayRange;
-                col = Color.Lerp(col, temperatureDegrees < 0 ? coldTemperatureColor : hotTemperatureColor, temperatureT);
-                if (showTemperatureValue)
-                    Draw.Text(FontType.JetbrainsMonoRegular, $"{temperatureDegrees:0.00}", fontSize, pos, Anchor.Centre, Color.white);
-                break;
-            case VisualizationMode.Smoke:
-                if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
-                    break;
-                float smoke = grid.smokeMap[i, j];
-                float smokeT = Mathf.Clamp01(smoke / smokeDisplayRange);
-                col = Color.Lerp(col, smokeColor, smokeT);
-                if (showSmokeValue)
-                    Draw.Text(FontType.JetbrainsMonoRegular, $"{smoke:0.00}", fontSize, pos, Anchor.Centre, Color.white);
-                break;
+            float smoke = grid.smokeMap[i, j];
+            float smokeT = Mathf.Clamp01(smoke / smokeDisplayRange);
+            col = Color.Lerp(col, smokeColor, smokeT);
+            if (showSmokeValue)
+                Draw.Text(FontType.JetbrainsMonoRegular, $"{smoke:0.00}", fontSize, pos, Anchor.Centre, Color.white);
+            break;
         }
 
         Draw.Quad(pos, CellDisplaySize, col);
@@ -225,13 +228,8 @@ public class FluidRenderer : MonoBehaviour {
                 float y = j;
                 float u = grid.GetVelocity(grid.velocityU, x, y, FluidGridMac.Axis.X);
                 Vector2 pos = CellCenterToWorld(x, y);
-                RenderVelocityArrow(
-                    pos,
-                    new Vector2(u, 0),
-                    velocityUColor,
-                    velocityPointRadius,
-                    velocityArrowLengthFactor,
-                    velocityArrowThickness);
+                RenderVelocityArrow(pos, new Vector2(u, 0), velocityUColor, velocityPointRadius,
+                                    velocityArrowLengthFactor, velocityArrowThickness);
             }
         }
 
@@ -242,13 +240,8 @@ public class FluidRenderer : MonoBehaviour {
                 float y = j - 0.5f;
                 float v = grid.GetVelocity(grid.velocityV, x, y, FluidGridMac.Axis.Y);
                 Vector2 pos = CellCenterToWorld(x, y);
-                RenderVelocityArrow(
-                    pos,
-                    new Vector2(0, v),
-                    velocityVColor,
-                    velocityPointRadius,
-                    velocityArrowLengthFactor,
-                    velocityArrowThickness);
+                RenderVelocityArrow(pos, new Vector2(0, v), velocityVColor, velocityPointRadius,
+                                    velocityArrowLengthFactor, velocityArrowThickness);
             }
         }
     }
@@ -262,13 +255,8 @@ public class FluidRenderer : MonoBehaviour {
     /// <param name="pointRadius">Radius of the point located at the tail of the arrow</param>
     /// <param name="arrowLengthFactor">Multiplier used to change the arrow length</param>
     /// <param name="arrowThickness">Thickness of the arrow</param>
-    void RenderVelocityArrow(
-        Vector2 position,
-        Vector2 velocity,
-        Color color,
-        float pointRadius,
-        float arrowLengthFactor,
-        float arrowThickness) {
+    void RenderVelocityArrow(Vector2 position, Vector2 velocity, Color color, float pointRadius,
+                             float arrowLengthFactor, float arrowThickness) {
         Draw.Point(position, pointRadius, color);
         Draw.Arrow(position, position + velocity * arrowLengthFactor, arrowThickness, arrowThickness * 3.5f, 32, color);
     }

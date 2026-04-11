@@ -343,12 +343,8 @@ public class FluidGridMac {
                 float velocityTerm = (velocityTop - velocityBottom + velocityRight - velocityLeft) / dt;
 
                 pressureSolverData[i, j] = new PressureSolverData() {
-                    flowTop = flowTop,
-                    flowBottom = flowBottom,
-                    flowRight = flowRight,
-                    flowLeft = flowLeft,
-                    flowEdgeCount = flowEdgeCount,
-                    velocityTerm = velocityTerm
+                    flowTop = flowTop,   flowBottom = flowBottom,       flowRight = flowRight,
+                    flowLeft = flowLeft, flowEdgeCount = flowEdgeCount, velocityTerm = velocityTerm
                 };
             }
         }
