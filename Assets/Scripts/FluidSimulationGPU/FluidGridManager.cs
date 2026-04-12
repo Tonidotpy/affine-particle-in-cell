@@ -16,7 +16,9 @@ public class FluidGridManager {
         PreparePressureSolver,
         RunPressureSolver,
         UpdateVelocities,
-        HandleInput
+        HandleInput,
+        UpdateObstacles,
+        ClearObstacles
     }
 
     /// <summary>
@@ -63,9 +65,16 @@ public class FluidGridManager {
     public RenderTexture smokeMap;
     public RenderTexture smokeMapAdvected;
 
+    public FluidObstacle[] obstacles;
+    public ComputeBuffer obstacleIndices;
+    public ComputeBuffer obstacleVertices;
+    public ComputeBuffer obstacleTriangles;
+
     public FluidGridManager(int width, int height, ComputeShader compute) {
         resolution = new(width, height);
         this.compute = compute;
+
+        obstacles = Array.Empty<FluidObstacle>();
 
         Setup();
         ComputeHelper.Dispatch(compute, width, height, ComputeKernel.Init);
@@ -81,7 +90,7 @@ public class FluidGridManager {
         ComputeHelper.CreateRenderTexture(ref debugMap, resolution.x, resolution.y, FilterMode.Point,
                                           GraphicsFormat.R32G32B32A32_SFloat);
         ComputeHelper.CreateRenderTexture(ref cellType, resolution.x, resolution.y, FilterMode.Point,
-                                          GraphicsFormat.R8_UInt);
+                                          GraphicsFormat.R32_SFloat);
         ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x, resolution.y, FilterMode.Bilinear,
                                           GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x, resolution.y,
@@ -233,8 +242,61 @@ public class FluidGridManager {
         compute.SetBool("inputShouldAddSmoke", false);
     }
 
+    public void UpdateObstacles() {
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.ClearObstacles);
+        int count = obstacles.Length;
+        if (count == 0)
+            return;
+
+        int vertexCount = 0;
+        int triangleCount = 0;
+        Array.ForEach(obstacles, obstacle => {
+            vertexCount += obstacle.GetMeshVertexCount;
+            triangleCount += obstacle.GetMeshTriangleCount;
+        });
+
+        ComputeHelper.CreateStructuredBuffer<FluidObstacle.MeshDataIndex>(ref obstacleIndices, count + 1, mode: ComputeBufferMode.SubUpdates);
+        ComputeHelper.CreateStructuredBuffer<Vector2>(ref obstacleVertices, vertexCount);
+        ComputeHelper.CreateStructuredBuffer<int>(ref obstacleTriangles, triangleCount);
+
+        compute.SetInt("obstacleCount", count);
+        ComputeHelper.SetBuffer(compute, obstacleIndices, "obstacleIndices", computeKernels);
+        ComputeHelper.SetBuffer(compute, obstacleVertices, "obstacleVertices", computeKernels);
+        ComputeHelper.SetBuffer(compute, obstacleTriangles, "obstacleTriangles", computeKernels);
+
+        var indices = obstacleIndices.BeginWrite<FluidObstacle.MeshDataIndex>(0, count + 1);
+
+        int vertexIndex = 0;
+        int triangleIndex = 0;
+        for (int i = 0; i < count; ++i) {
+            FluidObstacle.MeshData meshData = obstacles[i].GetMeshData();
+
+            // Set the index of the first vertex and triangle ID of the current obstacle
+            indices[i] = new FluidObstacle.MeshDataIndex {
+                vertex = vertexIndex,
+                triangle = triangleIndex
+            };
+
+            int vertexLength = meshData.vertices.Length;
+            int triangleLength = meshData.triangles.Length;
+            obstacleVertices.SetData(meshData.vertices, 0, vertexIndex, vertexLength);
+            obstacleTriangles.SetData(meshData.triangles, 0, triangleIndex, triangleLength);
+
+            vertexIndex += vertexLength;
+            triangleIndex += triangleLength;
+        }
+
+        indices[count] = new FluidObstacle.MeshDataIndex {
+            vertex = vertexIndex,
+            triangle = triangleIndex
+        };
+        obstacleIndices.EndWrite<FluidObstacle.MeshDataIndex>(count + 1);
+
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateObstacles);
+    }
+
     public void ReleaseTextures() {
-        ComputeHelper.Release(pressureSolverData);
+        ComputeHelper.Release(pressureSolverData, obstacleIndices, obstacleVertices, obstacleTriangles);
         ComputeHelper.Release(debugMap, cellType, velocityMap, velocityMapAdvected, pressureMap, temperatureMap,
                               smokeMap, smokeMapAdvected);
     }

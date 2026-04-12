@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using Seb.Helpers;
 
@@ -76,6 +77,11 @@ public class Test : MonoBehaviour {
         simulation.TemperatureDiffusionMultiplier = temperatureDiffusionMultiplier;
         simulation.TemperatureDecayMultiplier = temperatureDecayMultiplier;
         simulation.TemperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
+
+        FluidObstacle[] obstacles = GameObject.FindObjectsByType<FluidObstacle>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Array.ForEach(obstacles, obstacle => obstacle.Origin = simulationRenderer.HalfWorldSize);
+        simulation.Obstacles = obstacles;
     }
 
     void HandleInput() {
@@ -115,6 +121,7 @@ public class Test : MonoBehaviour {
         mousePositionOld = mousePosition;
 
         simulation.HandleInput();
+        simulation.HandleObstacles();
         simulationRenderer.RenderInput(mousePositionOld, isMouseLeftHeld);
     }
 }

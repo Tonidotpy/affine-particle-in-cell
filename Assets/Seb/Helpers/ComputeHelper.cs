@@ -100,14 +100,14 @@ namespace Seb.Helpers
 			buffer.SetCounterValue(0);
 		}
 
-		public static bool CreateStructuredBuffer<T>(ref ComputeBuffer buffer, int count)
+		public static bool CreateStructuredBuffer<T>(ref ComputeBuffer buffer, int count, ComputeBufferType type = ComputeBufferType.Default, ComputeBufferMode mode = ComputeBufferMode.Immutable)
 		{
 			int stride = GetStride<T>();
 			bool createNewBuffer = buffer == null || !buffer.IsValid() || buffer.count != count || buffer.stride != stride;
 			if (createNewBuffer)
 			{
 				Release(buffer);
-				buffer = new ComputeBuffer(count, stride);
+				buffer = new ComputeBuffer(count, stride, type, mode);
 				return true;
 			}
 

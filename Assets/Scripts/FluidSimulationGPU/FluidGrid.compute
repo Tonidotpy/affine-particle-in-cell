@@ -8,6 +8,8 @@
 #pragma kernel RunPressureSolver
 #pragma kernel UpdateVelocities
 #pragma kernel HandleInput
+#pragma kernel UpdateObstacles
+#pragma kernel ClearObstacles
 
 // --- Constants --- //
 static const uint FLOW_TOP_BIT_POS = 31;
@@ -15,8 +17,8 @@ static const uint FLOW_BOTTOM_BIT_POS = 30;
 static const uint FLOW_RIGHT_BIT_POS = 29;
 static const uint FLOW_LEFT_BIT_POS = 28;
 
-static const uint CELL_TYPE_SOLID = 0;
-static const uint CELL_TYPE_FLUID = 1;
+static const float CELL_TYPE_SOLID = 0;
+static const float CELL_TYPE_FLUID = 1;
 
 static const uint AXIS_ALL = -1;
 static const uint AXIS_X = 0;
@@ -26,6 +28,11 @@ static const uint AXIS_Y = 1;
 struct PressureSolverData {
     uint flowData;
     float velocityTerm;
+};
+
+struct ObstacleIndex {
+    int vertex;
+    int triang;
 };
 
 // --- Settings --- //
@@ -58,7 +65,7 @@ const float2 inputVelocity;
 
 // --- Textures --- //
 RWTexture2D<float4> debugMap;
-RWTexture2D<uint> cellType;
+RWTexture2D<float> cellType;
 RWTexture2D<float2> velocityMap;
 RWTexture2D<float2> velocityMapAdvected;
 RWTexture2D<float> pressureMap;
@@ -73,6 +80,13 @@ SamplerState sampler_velocityMapSample;
 Texture2D<float4> smokeMapSample;
 SamplerState sampler_smokeMapSample;
 
+// --- Obstacles --- //
+
+const int obstacleCount;
+StructuredBuffer<ObstacleIndex> obstacleIndices;
+StructuredBuffer<float2> obstacleVertices;
+StructuredBuffer<int> obstacleTriangles;
+
 // --- Utilities --- //
 bool IsInCellCenterBounds(int i, int j) {
     return i >= 0 && i < (int)resolution.x && j >= 0 && j < (int)resolution.y;
@@ -83,7 +97,7 @@ float GetCellCenterValue(RWTexture2D<float> grid, int i, int j, float defaultVal
 float2 GetCellCenterValue(RWTexture2D<float2> grid, int i, int j, float2 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 float4 GetCellCenterValue(RWTexture2D<float4> grid, int i, int j, float4 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 
-uint GetCellType(int i, int j) {
+float GetCellType(int i, int j) {
     return GetCellCenterValue(cellType, i, j, CELL_TYPE_SOLID);
 }
 
@@ -146,6 +160,17 @@ uint2 ClampCoordinates(uint2 index) {
     return clamp(index, 0, resolution - float2(1, 1));
 }
 
+bool IsPointInTriangle(float2 p, float2 v0, float2 v1, float2 v2) {
+    // Calculate the barycentric coordinates of point P with respect to triangle [v0, v1, v2]
+    float denominator = ((v1.y - v2.y) * (v0.x - v2.x) + (v2.x - v1.x) * (v0.y - v2.y));
+    float a = ((v1.y - v2.y) * (p.x - v2.x) + (v2.x - v1.x) * (p.y - v2.y)) / denominator;
+    float b = ((v2.y - v0.y) * (p.x - v2.x) + (v0.x - v2.x) * (p.y - v2.y)) / denominator;
+    float c = 1 - a - b;
+
+    // Check if all barycentric coordinates are non-negative
+    return a >= 0 && b >= 0 && c >= 0;
+}
+
 // --- Kernels --- //
 [numthreads(8,8,1)]
 void Init(uint3 id : SV_DispatchThreadID) {
@@ -156,9 +181,6 @@ void Init(uint3 id : SV_DispatchThreadID) {
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
     debugMap[id.xy] = 0;
-
-    if (dot(id.xy - 4, id.xy - 4) < 2)
-        velocityMap[id.xy] = 10;
 }
 
 [numthreads(8,8,1)]
@@ -166,12 +188,10 @@ void AdvectVelocities(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
     if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
-        // TODO: Never called without obstacles, check correctness after adding them
         velocityMapAdvected[id.xy] = 0;
         return;
     }
 
-    // TODO: Check behaviour with fluid to solid edges
     uint flowLeft = GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID;
     uint flowBottom = GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID;
 
@@ -383,4 +403,40 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
     if (inputShouldClearVelocity) {
         velocityMap[id.xy] = 0;
     }
+}
+
+[numthreads(8, 8, 1)]
+void UpdateObstacles(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    if (cellType[id.xy] == CELL_TYPE_SOLID) return;
+
+    bool isObstacle = false;
+    for (int i = 0; i < obstacleCount; ++i) {
+        ObstacleIndex cur = obstacleIndices[i];
+        ObstacleIndex next = obstacleIndices[i + 1];
+
+        for (int j = cur.triang; j < next.triang; j += 3) {
+            int t0 = cur.vertex + obstacleTriangles[j];
+            int t1 = cur.vertex + obstacleTriangles[j + 1];
+            int t2 = cur.vertex + obstacleTriangles[j + 2];
+
+            float2 v0 = obstacleVertices[t0];
+            float2 v1 = obstacleVertices[t1];
+            float2 v2 = obstacleVertices[t2];
+
+            if (IsPointInTriangle(id.xy, v0, v1, v2)) {
+                isObstacle = true;
+                cellType[id.xy] = CELL_TYPE_SOLID;
+            }
+        }
+    }
+
+    if (!isObstacle)
+        cellType[id.xy] = CELL_TYPE_FLUID;
+}
+
+[numthreads(8, 8, 1)]
+void ClearObstacles(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    cellType[id.xy] = CELL_TYPE_FLUID;
 }

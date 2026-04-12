@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace FluidSimulationGPU {
@@ -22,6 +23,8 @@ public class FluidSimulation {
     float timeStep => 1f / (60f * timeStepMultiplier);
     float timeStepMultiplier = 1;
     int solverIterations = 15;
+
+    public FluidObstacle[] Obstacles { get; set; }
 
     /// <summary>
     /// Get the staggered Grid manager
@@ -152,6 +155,10 @@ public class FluidSimulation {
         gridManager.HandleInput();
     }
 
+    public void HandleObstacles() {
+        gridManager.UpdateObstacles();
+    }
+
     public void Clean() {
         gridManager.ReleaseTextures();
     }
@@ -166,6 +173,7 @@ public class FluidSimulation {
         gridManager.temperatureDiffusionMultiplier = temperatureDiffusionMultiplier;
         gridManager.temperatureDecayMultiplier = temperatureDecayMultiplier;
         gridManager.temperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
+        gridManager.obstacles = Obstacles;
     }
 }
 }

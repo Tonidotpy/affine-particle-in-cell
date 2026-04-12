@@ -11,6 +11,10 @@ Shader "Unlit/FluidRenderer" {
 
 #include "UnityCG.cginc"
 
+// Cell types
+#define CELL_TYPE_SOLID (0)
+#define CELL_TYPE_FLUID (1)
+
 // Velocity channels
 #define VELOCITY_CHANNEL_X (0)
 #define VELOCITY_CHANNEL_Y (1)
@@ -37,6 +41,10 @@ Shader "Unlit/FluidRenderer" {
             int2 resolution;
             int visualizationMode;
             sampler2D debugMap;
+
+            // Obstacles
+            sampler2D cellType;
+            fixed4 obstacleColor;
 
             // Velocity
             sampler2D velocityMap;
@@ -116,6 +124,13 @@ Shader "Unlit/FluidRenderer" {
                 return fixed4(smoke * abs(smoke * smokeDisplayRange), 1);
             }
 
+            fixed4 RenderObstacle(v2f i, fixed4 col) {
+                uint type = tex2D(cellType, i.uv);
+                if (type == CELL_TYPE_SOLID)
+                    col = obstacleColor;
+                return col;
+            }
+
             fixed4 frag(v2f i) : SV_Target {
                 fixed4 col = fixed4(1, 0, 1, 1);
 
@@ -131,6 +146,9 @@ Shader "Unlit/FluidRenderer" {
                     col = RenderTemperature(i);
                 else if (visualizationMode == VISUALIZATION_MODE_SMOKE)
                     col = RenderSmoke(i);
+
+                // TODO: Allow rendering of different visualization modes in solid cells
+                col = RenderObstacle(i, col);
                 return col;
             }
             ENDCG
