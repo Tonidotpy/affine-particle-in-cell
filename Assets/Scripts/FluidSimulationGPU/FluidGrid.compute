@@ -44,6 +44,7 @@ struct ObstacleIndex {
 
 struct ObstacleData {
     bool isSmokeSource;
+    float smokeRateMultiplier;
     float3 smokeRate;
     float temperature;
 };
@@ -490,25 +491,27 @@ void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
     bool isEdgeRight = ((uint)cellType[id.xy].z & (1 << EDGE_RIGHT_BIT_POS)) != 0;
     bool isEdgeTop = ((uint)cellType[id.xy].z & (1 << EDGE_TOP_BIT_POS)) != 0;
 
+    float3 smokeRate = obstacle.smokeRate * dt * obstacle.smokeRateMultiplier;
+
     if (isEdgeLeft && IsInCellCenterBounds(id.x - 1, id.y)) {
         uint2 index = id.xy - uint2(1, 0);
         float dT = obstacle.temperature - smokeMap[index].a;
-        smokeMap[index] += float4(obstacle.smokeRate * dt, dT);
+        smokeMap[index] += float4(smokeRate, dT);
     }
     if (isEdgeBottom && IsInCellCenterBounds(id.x, id.y - 1)) {
         uint2 index = id.xy - uint2(0, 1);
         float dT = obstacle.temperature - smokeMap[index].a;
-        smokeMap[index] += float4(obstacle.smokeRate * dt, dT);
+        smokeMap[index] += float4(smokeRate, dT);
     }
     if (isEdgeRight && IsInCellCenterBounds(id.x + 1, id.y)) {
         uint2 index = id.xy + uint2(1, 0);
         float dT = obstacle.temperature - smokeMap[index].a;
-        smokeMap[index] += float4(obstacle.smokeRate * dt, dT);
+        smokeMap[index] += float4(smokeRate, dT);
     }
     if (isEdgeTop && IsInCellCenterBounds(id.x, id.y + 1)) {
         uint2 index = id.xy + uint2(0, 1);
         float dT = obstacle.temperature - smokeMap[index].a;
-        smokeMap[index] += float4(obstacle.smokeRate * dt, dT);
+        smokeMap[index] += float4(smokeRate, dT);
     }
 }
 
