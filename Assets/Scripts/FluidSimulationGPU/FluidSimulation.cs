@@ -150,6 +150,7 @@ public class FluidSimulation {
         gridManager.AdvectSmoke(timeStep);
         gridManager.AdvectVelocities(timeStep);
 
+        gridManager.AddSmokeFromSources(timeStep);
         gridManager.AddBuoyancyForce(timeStep);
 
         gridManager.SolvePressure(solverIterations, timeStep);

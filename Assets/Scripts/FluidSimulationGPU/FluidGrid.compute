@@ -9,6 +9,8 @@
 #pragma kernel UpdateVelocities
 #pragma kernel HandleInput
 #pragma kernel UpdateObstacles
+#pragma kernel UpdateObstacleEdges
+#pragma kernel UpdateSmokeSources
 #pragma kernel ClearObstacles
 
 // --- Constants --- //
@@ -16,6 +18,11 @@ static const uint FLOW_TOP_BIT_POS = 31;
 static const uint FLOW_BOTTOM_BIT_POS = 30;
 static const uint FLOW_RIGHT_BIT_POS = 29;
 static const uint FLOW_LEFT_BIT_POS = 28;
+
+static const uint EDGE_TOP_BIT_POS = 3;
+static const uint EDGE_BOTTOM_BIT_POS = 2;
+static const uint EDGE_RIGHT_BIT_POS = 1;
+static const uint EDGE_LEFT_BIT_POS = 0;
 
 static const float CELL_TYPE_SOLID = 0;
 static const float CELL_TYPE_FLUID = 1;
@@ -71,7 +78,7 @@ const float2 inputVelocity;
 
 // --- Textures --- //
 RWTexture2D<float4> debugMap;
-RWTexture2D<float2> cellType; // x: Cell Type, y: Obstacle Index (-1 if no obstacle)
+RWTexture2D<float4> cellType; // x: Cell Type, y: Obstacle Index (-1 if no obstacle), z: Pre-Calculated Edges, w: unused
 RWTexture2D<float2> velocityMap;
 RWTexture2D<float2> velocityMapAdvected;
 RWTexture2D<float> pressureMap;
@@ -102,10 +109,12 @@ bool IsInCellCenterBounds(int i, int j) {
 uint GetCellCenterValue(RWTexture2D<uint> grid, int i, int j, uint defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 float GetCellCenterValue(RWTexture2D<float> grid, int i, int j, float defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 float2 GetCellCenterValue(RWTexture2D<float2> grid, int i, int j, float2 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
+float3 GetCellCenterValue(RWTexture2D<float3> grid, int i, int j, float3 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 float4 GetCellCenterValue(RWTexture2D<float4> grid, int i, int j, float4 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 
-float2 GetCellType(int i, int j) {
-    return GetCellCenterValue(cellType, i, j, float2(CELL_TYPE_SOLID, -1));
+float4 GetCellType(int i, int j) {
+    // TODO: Check default edges
+    return GetCellCenterValue(cellType, i, j, float4(CELL_TYPE_SOLID, -1, 0, 0));
 }
 
 float GetPressure(int i, int j) {
@@ -183,7 +192,7 @@ bool IsPointInTriangle(float2 p, float2 v0, float2 v1, float2 v2) {
 void Init(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    cellType[id.xy] = float2(CELL_TYPE_FLUID, -1);
+    cellType[id.xy] = float4(CELL_TYPE_FLUID, -1, 0, 0);
     velocityMap[id.xy] = 0;
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
@@ -434,14 +443,15 @@ void UpdateObstacles(uint3 id : SV_DispatchThreadID) {
 
             if (IsPointInTriangle(id.xy, v0, v1, v2)) {
                 ++obstacleInCell;
-                cellType[id.xy] = float2(CELL_TYPE_SOLID, i);
+                // BUG: obstacle index is overwritten if multiple obstacles overlap
+                cellType[id.xy] = float4(CELL_TYPE_SOLID, i, 0, 0);
                 temperature += obstacleData[i].temperature;
             }
         }
     }
 
     if (obstacleInCell == 0) {
-        cellType[id.xy] = float2(CELL_TYPE_FLUID, -1);
+        cellType[id.xy] = float4(CELL_TYPE_FLUID, -1, 0, 0);
     }
     else {
         temperature /= obstacleInCell;
@@ -450,7 +460,61 @@ void UpdateObstacles(uint3 id : SV_DispatchThreadID) {
 }
 
 [numthreads(8, 8, 1)]
+void UpdateObstacleEdges(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    uint edges = 0;
+    bool isFluid = GetCellType(id.x, id.y).x == CELL_TYPE_FLUID;
+    bool isFluidLeft = GetCellType(id.x - 1, id.y).x == CELL_TYPE_FLUID;
+    bool isFluidBottom = GetCellType(id.x, id.y - 1).x == CELL_TYPE_FLUID;
+    bool isFluidRight = GetCellType(id.x + 1, id.y).x == CELL_TYPE_FLUID;
+    bool isFluidTop = GetCellType(id.x, id.y + 1).x == CELL_TYPE_FLUID;
+
+    edges |= (isFluid ^ isFluidLeft) << EDGE_LEFT_BIT_POS;
+    edges |= (isFluid ^ isFluidBottom) << EDGE_BOTTOM_BIT_POS;
+    edges |= (isFluid ^ isFluidRight) << EDGE_RIGHT_BIT_POS;
+    edges |= (isFluid ^ isFluidTop) << EDGE_TOP_BIT_POS;
+    cellType[id.xy] = float4(cellType[id.xy].xy, edges, 0);
+}
+
+[numthreads(8, 8, 1)]
+void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    if (cellType[id.xy].x == CELL_TYPE_FLUID) return;
+
+    uint obstacleIndex = cellType[id.xy].y;
+    ObstacleData obstacle = obstacleData[obstacleIndex];
+    if (!obstacle.isSmokeSource) return;
+
+    bool isEdgeLeft = ((uint)cellType[id.xy].z & (1 << EDGE_LEFT_BIT_POS)) != 0;
+    bool isEdgeBottom = ((uint)cellType[id.xy].z & (1 << EDGE_BOTTOM_BIT_POS)) != 0;
+    bool isEdgeRight = ((uint)cellType[id.xy].z & (1 << EDGE_RIGHT_BIT_POS)) != 0;
+    bool isEdgeTop = ((uint)cellType[id.xy].z & (1 << EDGE_TOP_BIT_POS)) != 0;
+
+    if (isEdgeLeft && IsInCellCenterBounds(id.x - 1, id.y)) {
+        uint2 index = id.xy - uint2(1, 0);
+        float dT = obstacle.temperature - smokeMap[index].a;
+        smokeMap[index] += float4(obstacle.smokeRate * dt, dT);
+    }
+    if (isEdgeBottom && IsInCellCenterBounds(id.x, id.y - 1)) {
+        uint2 index = id.xy - uint2(0, 1);
+        float dT = obstacle.temperature - smokeMap[index].a;
+        smokeMap[index] += float4(obstacle.smokeRate * dt, dT);
+    }
+    if (isEdgeRight && IsInCellCenterBounds(id.x + 1, id.y)) {
+        uint2 index = id.xy + uint2(1, 0);
+        float dT = obstacle.temperature - smokeMap[index].a;
+        smokeMap[index] += float4(obstacle.smokeRate * dt, dT);
+    }
+    if (isEdgeTop && IsInCellCenterBounds(id.x, id.y + 1)) {
+        uint2 index = id.xy + uint2(0, 1);
+        float dT = obstacle.temperature - smokeMap[index].a;
+        smokeMap[index] += float4(obstacle.smokeRate * dt, dT);
+    }
+}
+
+
+[numthreads(8, 8, 1)]
 void ClearObstacles(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
-    cellType[id.xy] = float2(CELL_TYPE_FLUID, -1);
+    cellType[id.xy] = float4(CELL_TYPE_FLUID, -1, 0, 0);
 }

@@ -125,8 +125,8 @@ Shader "Unlit/FluidRenderer" {
             }
 
             fixed4 RenderObstacle(v2f i, fixed4 col) {
-                uint2 type = tex2D(cellType, i.uv).xy;
-                if (type.x == CELL_TYPE_SOLID)
+                uint type = tex2D(cellType, i.uv).x;
+                if (type == CELL_TYPE_SOLID)
                     col = obstacleColor;
                 return col;
             }

@@ -18,6 +18,8 @@ public class FluidGridManager {
         UpdateVelocities,
         HandleInput,
         UpdateObstacles,
+        UpdateObstacleEdges,
+        UpdateSmokeSources,
         ClearObstacles
     }
 
@@ -93,7 +95,7 @@ public class FluidGridManager {
         // Cell type render texture format uses float because integers do not
         // sample correctly inside shaders for wathever reasons
         ComputeHelper.CreateRenderTexture(ref cellType, resolution.x, resolution.y, FilterMode.Point,
-                                          GraphicsFormat.R32G32_SFloat);
+                                          GraphicsFormat.R32G32B32A32_SFloat);
         ComputeHelper.CreateRenderTexture(ref velocityMap, resolution.x, resolution.y, FilterMode.Bilinear,
                                           GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref velocityMapAdvected, resolution.x, resolution.y,
@@ -160,6 +162,14 @@ public class FluidGridManager {
         compute.SetFloat("temperatureDecayMultiplier", temperatureDecayMultiplier);
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.AdvectSmoke);
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.SmokeAdvectionReadback);
+    }
+
+    /// <summary>
+    /// Add smoke from smoke sources
+    /// </summary>
+    public void AddSmokeFromSources(float dt) {
+        compute.SetFloat("dt", dt);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateSmokeSources);
     }
 
     /// <summary>
@@ -301,6 +311,7 @@ public class FluidGridManager {
         obstacleIndices.EndWrite<FluidObstacle.MeshDataIndex>(count + 1);
 
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateObstacles);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateObstacleEdges);
     }
 
     public void ReleaseTextures() {
