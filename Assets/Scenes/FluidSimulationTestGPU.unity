@@ -150,6 +150,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 088f61c6cda97b167a80946954319cdf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.FluidObstacle
+  isSmokeSource: 0
+  smokeRate: {x: 0, y: 0, z: 0}
+  temperature: 30
 --- !u!23 &313268228
 MeshRenderer:
   m_ObjectHideFlags: 0

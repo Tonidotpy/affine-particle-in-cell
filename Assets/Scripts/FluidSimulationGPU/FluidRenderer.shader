@@ -88,9 +88,9 @@ Shader "Unlit/FluidRenderer" {
                 float2 velocity = tex2D(velocityMap, i.uv).rg;
                 fixed4 col = fixed4(0, 0, 0, 1);
                 if (velocityChannel == VELOCITY_CHANNEL_X || velocityChannel == VELOCITY_CHANNEL_BOTH)
-                    col.r = abs(velocity.x * velocity.x * velocityDisplayRange);
+                    col.r = velocity.x * velocityDisplayRange;
                 if (velocityChannel == VELOCITY_CHANNEL_Y || velocityChannel == VELOCITY_CHANNEL_BOTH)
-                    col.g = abs(velocity.y * velocity.y * velocityDisplayRange);
+                    col.g = velocity.y * velocityDisplayRange;
                 return col;
             }
 
@@ -125,8 +125,8 @@ Shader "Unlit/FluidRenderer" {
             }
 
             fixed4 RenderObstacle(v2f i, fixed4 col) {
-                uint type = tex2D(cellType, i.uv);
-                if (type == CELL_TYPE_SOLID)
+                uint2 type = tex2D(cellType, i.uv).xy;
+                if (type.x == CELL_TYPE_SOLID)
                     col = obstacleColor;
                 return col;
             }
@@ -147,8 +147,8 @@ Shader "Unlit/FluidRenderer" {
                 else if (visualizationMode == VISUALIZATION_MODE_SMOKE)
                     col = RenderSmoke(i);
 
-                // TODO: Allow rendering of different visualization modes in solid cells
-                col = RenderObstacle(i, col);
+                if (visualizationMode != VISUALIZATION_MODE_TEMPERATURE)
+                    col = RenderObstacle(i, col);
                 return col;
             }
             ENDCG

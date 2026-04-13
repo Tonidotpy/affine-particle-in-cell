@@ -35,6 +35,12 @@ struct ObstacleIndex {
     int triang;
 };
 
+struct ObstacleData {
+    bool isSmokeSource;
+    float3 smokeRate;
+    float temperature;
+};
+
 // --- Settings --- //
 const uint2 resolution;
 const float dt; // s
@@ -65,7 +71,7 @@ const float2 inputVelocity;
 
 // --- Textures --- //
 RWTexture2D<float4> debugMap;
-RWTexture2D<float> cellType;
+RWTexture2D<float2> cellType; // x: Cell Type, y: Obstacle Index (-1 if no obstacle)
 RWTexture2D<float2> velocityMap;
 RWTexture2D<float2> velocityMapAdvected;
 RWTexture2D<float> pressureMap;
@@ -83,6 +89,7 @@ SamplerState sampler_smokeMapSample;
 // --- Obstacles --- //
 
 const int obstacleCount;
+StructuredBuffer<ObstacleData> obstacleData;
 StructuredBuffer<ObstacleIndex> obstacleIndices;
 StructuredBuffer<float2> obstacleVertices;
 StructuredBuffer<int> obstacleTriangles;
@@ -97,8 +104,8 @@ float GetCellCenterValue(RWTexture2D<float> grid, int i, int j, float defaultVal
 float2 GetCellCenterValue(RWTexture2D<float2> grid, int i, int j, float2 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 float4 GetCellCenterValue(RWTexture2D<float4> grid, int i, int j, float4 defaultValue) { return IsInCellCenterBounds(i, j) ? grid[uint2(i, j)] : defaultValue; }
 
-float GetCellType(int i, int j) {
-    return GetCellCenterValue(cellType, i, j, CELL_TYPE_SOLID);
+float2 GetCellType(int i, int j) {
+    return GetCellCenterValue(cellType, i, j, float2(CELL_TYPE_SOLID, -1));
 }
 
 float GetPressure(int i, int j) {
@@ -176,7 +183,7 @@ bool IsPointInTriangle(float2 p, float2 v0, float2 v1, float2 v2) {
 void Init(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    cellType[id.xy] = CELL_TYPE_FLUID;
+    cellType[id.xy] = float2(CELL_TYPE_FLUID, -1);
     velocityMap[id.xy] = 0;
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
@@ -187,13 +194,13 @@ void Init(uint3 id : SV_DispatchThreadID) {
 void AdvectVelocities(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
+    if (GetCellType(id.x, id.y).x != CELL_TYPE_FLUID) {
         velocityMapAdvected[id.xy] = 0;
         return;
     }
 
-    uint flowLeft = GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID;
-    uint flowBottom = GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID;
+    uint flowLeft = GetCellType(id.x - 1, id.y).x == CELL_TYPE_FLUID;
+    uint flowBottom = GetCellType(id.x, id.y - 1).x == CELL_TYPE_FLUID;
 
     float2 v = velocityMapSample[id.xy];
     float2 positionPrevLeft = RewindPos(float2(id.x - 0.5, id.y));
@@ -259,9 +266,9 @@ void AddBuoyancyForce(uint3 id : SV_DispatchThreadID) {
     float2 smokeConcentration = float2(dot(smokeLeft.rgb, 1) / 3.0, dot(smokeBottom.rgb, 1) / 3.0);
     float2 buoyancySmoke = smokeBuoyancyMultiplier * smokeConcentration;
 
-    bool isFluid = cellType[id.xy] == CELL_TYPE_FLUID;
-    uint flowBottom = isFluid && (GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID);
-    uint flowLeft = isFluid && (GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID);
+    bool isFluid = cellType[id.xy].x == CELL_TYPE_FLUID;
+    uint flowBottom = isFluid && (GetCellType(id.x, id.y - 1).x == CELL_TYPE_FLUID);
+    uint flowLeft = isFluid && (GetCellType(id.x - 1, id.y).x == CELL_TYPE_FLUID);
 
     float2 dv = (buoyancySmoke - buoyancyTemperature) * gravity * dt;
     dv.x = flowLeft ? dv.x : 0;
@@ -273,11 +280,11 @@ void AddBuoyancyForce(uint3 id : SV_DispatchThreadID) {
 void PreparePressureSolver(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    bool isFluid = cellType[id.xy] == CELL_TYPE_FLUID;
-    uint flowLeft = isFluid && (GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID);
-    uint flowBottom = isFluid && (GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID);
-    uint flowRight= isFluid && (GetCellType(id.x + 1, id.y) == CELL_TYPE_FLUID);
-    uint flowTop = isFluid && (GetCellType(id.x, id.y + 1) == CELL_TYPE_FLUID);
+    bool isFluid = cellType[id.xy].x == CELL_TYPE_FLUID;
+    uint flowLeft = isFluid && (GetCellType(id.x - 1, id.y).x == CELL_TYPE_FLUID);
+    uint flowBottom = isFluid && (GetCellType(id.x, id.y - 1).x == CELL_TYPE_FLUID);
+    uint flowRight= isFluid && (GetCellType(id.x + 1, id.y).x == CELL_TYPE_FLUID);
+    uint flowTop = isFluid && (GetCellType(id.x, id.y + 1).x == CELL_TYPE_FLUID);
     uint flowEdgeCount = flowTop + flowBottom + flowRight + flowLeft;
     // BUG: Apparently chaining all OR (|) operations into a single line
     // causes the compiler to optimize too aggresively resulting in broken
@@ -346,13 +353,13 @@ void RunPressureSolver(uint3 id : SV_DispatchThreadID) {
 void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) {
+    if (GetCellType(id.x, id.y).x != CELL_TYPE_FLUID) {
         velocityMap[id.xy] = 0;
         return;
     }
 
-    uint flowLeft = GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID;
-    uint flowBottom = GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID;
+    uint flowLeft = GetCellType(id.x - 1, id.y).x == CELL_TYPE_FLUID;
+    uint flowBottom = GetCellType(id.x, id.y - 1).x == CELL_TYPE_FLUID;
 
     const float k = density / dt;
     float pressureCenter = GetPressure(id.x, id.y);
@@ -378,9 +385,9 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
             CalculateInputVelocityWeight(float2(id.x, id.y - 0.5))
         );
 
-        int isSolid = GetCellType(id.x, id.y) == CELL_TYPE_SOLID;
-        int isSolidLeft = isSolid || (GetCellType(id.x - 1, id.y) == CELL_TYPE_SOLID);
-        int isSolidBottom = isSolid || (GetCellType(id.x, id.y - 1) == CELL_TYPE_SOLID);
+        int isSolid = GetCellType(id.x, id.y).x != CELL_TYPE_FLUID;
+        int isSolidLeft = isSolid || (GetCellType(id.x - 1, id.y).x != CELL_TYPE_FLUID);
+        int isSolidBottom = isSolid || (GetCellType(id.x, id.y - 1).x != CELL_TYPE_FLUID);
 
         float2 dv = weight * inputVelocity;
         dv.x *= 1 - isSolidLeft;
@@ -389,7 +396,7 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
     }
 
     // Add smoke
-    if (inputShouldAddSmoke && GetCellType(id.x, id.y) == CELL_TYPE_FLUID) {
+    if (inputShouldAddSmoke && GetCellType(id.x, id.y).x == CELL_TYPE_FLUID) {
         float d = distance(id.xy, inputSmokePosition);
         if (d <= inputSmokeRadius) {
             float relativeTemperature = inputSmokeTemperature - ambientTemperature;
@@ -408,9 +415,10 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
 [numthreads(8, 8, 1)]
 void UpdateObstacles(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
-    if (cellType[id.xy] == CELL_TYPE_SOLID) return;
+    if (cellType[id.xy].x != CELL_TYPE_FLUID) return;
 
-    bool isObstacle = false;
+    uint obstacleInCell = 0;
+    float temperature = 0;
     for (int i = 0; i < obstacleCount; ++i) {
         ObstacleIndex cur = obstacleIndices[i];
         ObstacleIndex next = obstacleIndices[i + 1];
@@ -425,18 +433,24 @@ void UpdateObstacles(uint3 id : SV_DispatchThreadID) {
             float2 v2 = obstacleVertices[t2];
 
             if (IsPointInTriangle(id.xy, v0, v1, v2)) {
-                isObstacle = true;
-                cellType[id.xy] = CELL_TYPE_SOLID;
+                ++obstacleInCell;
+                cellType[id.xy] = float2(CELL_TYPE_SOLID, i);
+                temperature += obstacleData[i].temperature;
             }
         }
     }
 
-    if (!isObstacle)
-        cellType[id.xy] = CELL_TYPE_FLUID;
+    if (obstacleInCell == 0) {
+        cellType[id.xy] = float2(CELL_TYPE_FLUID, -1);
+    }
+    else {
+        temperature /= obstacleInCell;
+        smokeMap[id.xy] = float4(0, 0, 0, temperature);
+    }
 }
 
 [numthreads(8, 8, 1)]
 void ClearObstacles(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
-    cellType[id.xy] = CELL_TYPE_FLUID;
+    cellType[id.xy] = float2(CELL_TYPE_FLUID, -1);
 }

@@ -136,12 +136,17 @@ public class FluidSimulation {
     }
 
     /// <summary>
+    /// Setup the simulation before actually running the step
+    /// </summary>
+    public void SetupStep() {
+        UpdateGridSettings();
+        gridManager.Setup();
+    }
+
+    /// <summary>
     /// Run a single step of the fluid simulation
     /// </summary>
     public void RunStep() {
-        UpdateGridSettings();
-        gridManager.Setup();
-
         gridManager.AdvectSmoke(timeStep);
         gridManager.AdvectVelocities(timeStep);
 

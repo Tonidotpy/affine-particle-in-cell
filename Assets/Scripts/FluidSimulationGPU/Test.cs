@@ -52,6 +52,7 @@ public class Test : MonoBehaviour {
 
     void Update() {
         UpdateSimulationSettings();
+        simulation.SetupStep();
 
         if (!isSimulationPaused || shouldRunSimulationStepOnce) {
             shouldRunSimulationStepOnce = false;
