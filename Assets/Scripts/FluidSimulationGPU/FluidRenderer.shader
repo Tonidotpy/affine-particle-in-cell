@@ -2,6 +2,7 @@ Shader "Unlit/FluidRenderer" {
     Properties {
     }
     SubShader {
+        Blend SrcAlpha OneMinusSrcAlpha
         Tags{ "RenderType" = "Opaque" } LOD 100
 
             Pass {
@@ -78,6 +79,12 @@ Shader "Unlit/FluidRenderer" {
                 return o;
             }
 
+            float RandomNumber(float2 p) {
+                p = frac(p * float2(234.34, 435.345));
+                p += dot(p, p + 34.23);
+                return frac(p.x * p.y);
+            }
+
             fixed4 RenderDebug(v2f i) {
                 float4 val = tex2D(debugMap, i.uv);
                 fixed4 col = fixed4(val.xyz, 1);
@@ -125,9 +132,23 @@ Shader "Unlit/FluidRenderer" {
             }
 
             fixed4 RenderObstacle(v2f i, fixed4 col) {
-                uint type = tex2D(cellType, i.uv).x;
-                if (type == CELL_TYPE_SOLID)
-                    col = obstacleColor;
+                uint3 type = tex2D(cellType, i.uv).xyz;
+                if (type.x == CELL_TYPE_SOLID) {
+                    // Check if it is an obstacle from its index
+                    if (type.y < 0) { col = obstacleColor; }
+                    else {
+                        // Check if it is an obstacle edge
+                        if (type.z > 0) { col = obstacleColor; }
+                        else {
+                            col = fixed4(
+                                RandomNumber(float2(type.y, -1)),
+                                RandomNumber(float2(type.y, 0)),
+                                RandomNumber(float2(type.y, 1)),
+                                0.3
+                            );
+                        }
+                    }
+                }
                 return col;
             }
 
