@@ -483,6 +483,8 @@ void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
     if (cellType[id.xy].x == CELL_TYPE_FLUID) return;
 
     uint obstacleIndex = cellType[id.xy].y;
+    if (obstacleIndex < 0) return;
+
     ObstacleData obstacle = obstacleData[obstacleIndex];
     if (!obstacle.isSmokeSource) return;
 
