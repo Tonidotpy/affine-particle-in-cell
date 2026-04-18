@@ -45,6 +45,10 @@ public class FluidGridManager {
     static readonly int[] computeKernels = (int[])Enum.GetValues(typeof(ComputeKernel));
 
     public readonly Vector2Int resolution = new(50, 35);
+    public bool closeLeftEdge = false;
+    public bool closeBottomEdge = false;
+    public bool closeRightEdge = false;
+    public bool closeTopEdge = false;
 
     public float sorMultiplier = 1.7f;
     public Vector2 gravity = new Vector2(0, -9.81f); // m/s^2
@@ -274,6 +278,10 @@ public class FluidGridManager {
         ComputeHelper.CreateStructuredBuffer<int>(ref obstacleTriangles, triangleCount);
 
         compute.SetInt("obstacleCount", count);
+        compute.SetBool("closeLeftEdge", closeLeftEdge);
+        compute.SetBool("closeBottomEdge", closeBottomEdge);
+        compute.SetBool("closeRightEdge", closeRightEdge);
+        compute.SetBool("closeTopEdge", closeTopEdge);
         ComputeHelper.SetBuffer(compute, obstacleData, "obstacleData", computeKernels);
         ComputeHelper.SetBuffer(compute, obstacleIndices, "obstacleIndices", computeKernels);
         ComputeHelper.SetBuffer(compute, obstacleVertices, "obstacleVertices", computeKernels);

@@ -137,7 +137,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &313268227
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -150,8 +150,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 088f61c6cda97b167a80946954319cdf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.FluidObstacle
-  isSmokeSource: 0
-  smokeRate: {x: 0, y: 0, z: 0}
+  isSmokeSource: 1
+  smokeRateMultiplier: 1
+  smokeRate: {x: 1, y: 0, z: 1}
   temperature: 30
 --- !u!23 &313268228
 MeshRenderer:
@@ -225,6 +226,99 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &315953418
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -7635826562936255635, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 10758, guid: 0000000000000000f000000000000000, type: 0}
+    - target: {fileID: 919132149155446097, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      propertyPath: m_Name
+      value: Circle
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 8164078558771037576, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1176055231}
+  m_SourcePrefab: {fileID: 100100000, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+--- !u!1 &1176055229 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8164078558771037576, guid: a17e7dfba37138cea9ac01eb39265b23, type: 3}
+  m_PrefabInstance: {fileID: 315953418}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1176055231
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1176055229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 088f61c6cda97b167a80946954319cdf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.FluidObstacle
+  isSmokeSource: 1
+  smokeRateMultiplier: 5
+  smokeRate: {x: 0.7, y: 0.2, z: 0.5}
+  temperature: 30
 --- !u!1 &1407357497
 GameObject:
   m_ObjectHideFlags: 0
@@ -258,7 +352,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.Test
   compute: {fileID: 7200000, guid: 8e2415becaf70d38db1062178773686c, type: 3}
-  resolution: {x: 288, y: 144}
+  resolution: {x: 512, y: 288}
   fluidDensity: 1.3
   solverIterations: 30
   sor: 1.7
@@ -477,3 +571,4 @@ SceneRoots:
   - {fileID: 1831286255}
   - {fileID: 1407357499}
   - {fileID: 313268230}
+  - {fileID: 315953418}

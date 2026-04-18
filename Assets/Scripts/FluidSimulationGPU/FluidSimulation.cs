@@ -9,6 +9,7 @@ public class FluidSimulation {
     FluidGridManager gridManager;
     Vector2 gravity = new Vector2(0, -9.81f); // m/s^2
     float fluidDensity = 1.3f;                // kg/m^2
+
     float ambientTemperature = 300f;          // K
     float smokeDiffusionMultiplier = 0.3f;
     float smokeDecayMultiplier = 1f;
@@ -23,6 +24,11 @@ public class FluidSimulation {
     float timeStep => 1f / (60f * timeStepMultiplier);
     float timeStepMultiplier = 1;
     int solverIterations = 15;
+
+    public bool CloseLeftEdge { get; set; }
+    public bool CloseBottomEdge { get; set; }
+    public bool CloseRightEdge { get; set; }
+    public bool CloseTopEdge { get; set; }
 
     public FluidObstacle[] Obstacles { get; set; }
 
@@ -170,6 +176,11 @@ public class FluidSimulation {
     }
 
     void UpdateGridSettings() {
+        gridManager.closeLeftEdge = CloseLeftEdge;
+        gridManager.closeBottomEdge = CloseBottomEdge;
+        gridManager.closeRightEdge = CloseRightEdge;
+        gridManager.closeTopEdge = CloseTopEdge;
+
         gridManager.gravity = gravity;
         gridManager.density = fluidDensity;
         gridManager.ambientTemperature = ambientTemperature;

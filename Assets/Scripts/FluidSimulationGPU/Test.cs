@@ -10,6 +10,11 @@ public class Test : MonoBehaviour {
     public Vector2Int resolution = new(50, 50);
     public float fluidDensity = 1.3f; // kg/m^2
 
+    public bool closeLeftEdge = false;
+    public bool closeBottomEdge = false;
+    public bool closeRightEdge = false;
+    public bool closeTopEdge = false;
+
     [Header("Simulation Settings")]
     public int solverIterations = 15;
     public float sor = 1.7f;
@@ -66,6 +71,11 @@ public class Test : MonoBehaviour {
     }
 
     void UpdateSimulationSettings() {
+        simulation.CloseLeftEdge = closeLeftEdge;
+        simulation.CloseBottomEdge = closeBottomEdge;
+        simulation.CloseRightEdge = closeRightEdge;
+        simulation.CloseTopEdge = closeTopEdge;
+
         simulation.SOR = sor;
         simulation.TimeStepMultiplier = timeStepMultiplier;
         simulation.SolverIterations = solverIterations;
