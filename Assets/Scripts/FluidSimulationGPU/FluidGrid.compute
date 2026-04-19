@@ -178,8 +178,7 @@ float4 SampleSmoke(float2 position) {
     // float2(0.5, 0.5) is added to the position because the textures origin is
     // not at the center of the pixel but on its bottom left corner
 
-    float2 uv = (position.xy + 0.5) / float2(resolution.xy);
-    if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1) return float4(0, 0, 0, ambientTemperature);
+    float2 uv = saturate((position.xy + 0.5) / float2(resolution.xy));
     return smokeMapSample.SampleLevel(sampler_smokeMapSample, uv.xy, 0);
 }
 
