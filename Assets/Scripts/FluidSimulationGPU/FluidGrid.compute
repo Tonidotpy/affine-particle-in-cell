@@ -110,8 +110,8 @@ StructuredBuffer<float2> obstacleVertices;
 StructuredBuffer<int> obstacleTriangles;
 
 // --- Utilities --- //
-uint2 ClampCoordinates(uint i, uint j) {
-    return clamp(uint2(i, j), 0, resolution - 1);
+uint2 ClampCoordinates(int i, int j) {
+    return (uint2)clamp(int2(i, j), 0, (int2)resolution - 1);
 }
 
 bool IsInCellCenterBounds(int i, int j) {
@@ -596,8 +596,6 @@ void UpdateVelocitySources(uint3 id : SV_DispatchThreadID) {
             velocityMap[id.xy] = v;
         }
     }
-
-    velocityMapAdvected[id.xy] = 0;
 }
 
 
