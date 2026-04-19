@@ -579,7 +579,7 @@ void UpdateVelocitySources(uint3 id : SV_DispatchThreadID) {
         if (obstacleIndex >= 0) {
             ObstacleData obstacle = obstacleData[obstacleIndex];
             float2 v = velocityMap[id.xy];
-            v.x += obstacle.velocitySource.x * dt;
+            v.x = obstacle.velocitySource.x;
             velocityMap[id.xy] = v;
         }
     }
@@ -591,7 +591,7 @@ void UpdateVelocitySources(uint3 id : SV_DispatchThreadID) {
         if (obstacleIndex >= 0) {
             ObstacleData obstacle = obstacleData[obstacleIndex];
             float2 v = velocityMap[id.xy];
-            v.y += obstacle.velocitySource.y * dt;
+            v.y = obstacle.velocitySource.y;
             velocityMap[id.xy] = v;
         }
     }
