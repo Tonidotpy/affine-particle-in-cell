@@ -326,7 +326,7 @@ void PreparePressureSolver(uint3 id : SV_DispatchThreadID) {
     float k = density / dt;
     float velocityTerm = (flowEdgeCount == 0) ?
         0 :
-        (velocityTop - velocityBottom + velocityRight - velocityLeft) / k;
+        (velocityTop - velocityBottom + velocityRight - velocityLeft) * k;
 
     // float divergence = velocityTop - velocityBottom + velocityRight - velocityLeft;
     // debugMap[id.xy] = float4(divergence, 0, -divergence, 1);
@@ -380,7 +380,7 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
     uint flowLeft = GetCellType(id.x - 1, id.y) == CELL_TYPE_FLUID;
     uint flowBottom = GetCellType(id.x, id.y - 1) == CELL_TYPE_FLUID;
 
-    const float k = density / dt;
+    const float k = dt / density;
     float pressureCenter = GetPressure(id.x, id.y);
     float pressureLeft = GetPressure(id.x - 1, id.y);
     float pressureBottom = GetPressure(id.x, id.y - 1);
@@ -418,10 +418,10 @@ void HandleInput(uint3 id : SV_DispatchThreadID) {
     if (inputShouldAddSmoke && GetCellType(id.x, id.y) == CELL_TYPE_FLUID) {
         float d = distance(id.xy, inputSmokePosition);
         if (d <= inputSmokeRadius) {
-            float relativeTemperature = inputSmokeTemperature - ambientTemperature;
+            float relativeTemperature = inputSmokeTemperature - smokeMap[id.xy].a;
             // debugMap[id.xy] = float4(relativeTemperature, -relativeTemperature, 0, 1);
             float fallof = 1 - (d / inputSmokeRadius);
-            smokeMap[id.xy] += float4(inputSmokeColor * inputSmokeAmount * fallof, relativeTemperature);
+            smokeMap[id.xy] += float4(inputSmokeColor * inputSmokeAmount * fallof, relativeTemperature) * dt;
         }
     }
 
