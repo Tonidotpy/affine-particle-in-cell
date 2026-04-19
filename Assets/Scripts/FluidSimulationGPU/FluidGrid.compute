@@ -11,6 +11,7 @@
 #pragma kernel UpdateObstacles
 #pragma kernel UpdateObstacleEdges
 #pragma kernel UpdateSmokeSources
+#pragma kernel UpdateVelocitySources
 #pragma kernel ClearObstacles
 
 // --- Constants --- //
@@ -44,6 +45,7 @@ struct ObstacleIndex {
 
 struct ObstacleData {
     bool isSmokeSource;
+    float2 velocitySource;
     float smokeRateMultiplier;
     float3 smokeRate;
     float temperature;
@@ -505,41 +507,97 @@ void UpdateObstacleEdges(uint3 id : SV_DispatchThreadID) {
 [numthreads(8, 8, 1)]
 void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
-    if (GetCellType(id.x, id.y) == CELL_TYPE_FLUID) return;
-
-    int obstacleIndex = (int)cellType[id.xy].y;
-    if (obstacleIndex < 0) return;
-
-    ObstacleData obstacle = obstacleData[obstacleIndex];
-    if (!obstacle.isSmokeSource) return;
+    if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) return;
 
     bool isEdgeLeft = ((uint)cellType[id.xy].z & (1 << EDGE_LEFT_BIT_POS)) != 0;
     bool isEdgeBottom = ((uint)cellType[id.xy].z & (1 << EDGE_BOTTOM_BIT_POS)) != 0;
     bool isEdgeRight = ((uint)cellType[id.xy].z & (1 << EDGE_RIGHT_BIT_POS)) != 0;
     bool isEdgeTop = ((uint)cellType[id.xy].z & (1 << EDGE_TOP_BIT_POS)) != 0;
 
-    float3 smokeRate = obstacle.smokeRate * dt * obstacle.smokeRateMultiplier;
+    int obstacleIndexLeft = cellType[ClampCoordinates(id.x - 1, id.y)].y;
+    int obstacleIndexBottom = cellType[ClampCoordinates(id.x, id.y - 1)].y;
+    int obstacleIndexRight = cellType[ClampCoordinates(id.x + 1, id.y)].y;
+    int obstacleIndexTop = cellType[ClampCoordinates(id.x, id.y + 1)].y;
 
-    if (isEdgeLeft && IsInCellCenterBounds(id.x - 1, id.y)) {
-        uint2 index = id.xy - uint2(1, 0);
-        float dT = obstacle.temperature - smokeMap[index].a;
-        smokeMap[index] += float4(smokeRate, dT);
+    int smokeContribution = 0;
+    float3 smokeRate = 0;
+    float dT = 0;
+
+    if (isEdgeLeft && obstacleIndexLeft >= 0) {
+        ObstacleData obstacle = obstacleData[obstacleIndexLeft];
+        // BUG: Without this line the smoke is not added to the left edges
+        [branch]
+        if (obstacle.isSmokeSource) {
+            smokeRate += obstacle.smokeRate * dt * obstacle.smokeRateMultiplier;
+            // debugMap[id.xy] = float4(smokeRate * 10, 1);
+            dT += obstacle.temperature - smokeMap[id.xy].a;
+            ++smokeContribution;
+        }
     }
-    if (isEdgeBottom && IsInCellCenterBounds(id.x, id.y - 1)) {
-        uint2 index = id.xy - uint2(0, 1);
-        float dT = obstacle.temperature - smokeMap[index].a;
-        smokeMap[index] += float4(smokeRate, dT);
+    if (isEdgeBottom && obstacleIndexBottom >= 0) {
+        ObstacleData obstacle = obstacleData[obstacleIndexBottom];
+        if (obstacle.isSmokeSource) {
+            smokeRate += obstacle.smokeRate * dt * obstacle.smokeRateMultiplier;
+            dT += obstacle.temperature - smokeMap[id.xy].a;
+            ++smokeContribution;
+        }
     }
-    if (isEdgeRight && IsInCellCenterBounds(id.x + 1, id.y)) {
-        uint2 index = id.xy + uint2(1, 0);
-        float dT = obstacle.temperature - smokeMap[index].a;
-        smokeMap[index] += float4(smokeRate, dT);
+    if (isEdgeRight && obstacleIndexRight >= 0) {
+        ObstacleData obstacle = obstacleData[obstacleIndexRight];
+        if (obstacle.isSmokeSource) {
+            smokeRate += obstacle.smokeRate * dt * obstacle.smokeRateMultiplier;
+            dT += obstacle.temperature - smokeMap[id.xy].a;
+            ++smokeContribution;
+        }
     }
-    if (isEdgeTop && IsInCellCenterBounds(id.x, id.y + 1)) {
-        uint2 index = id.xy + uint2(0, 1);
-        float dT = obstacle.temperature - smokeMap[index].a;
-        smokeMap[index] += float4(smokeRate, dT);
+    if (isEdgeTop && obstacleIndexTop >= 0) {
+        ObstacleData obstacle = obstacleData[obstacleIndexTop];
+        if (obstacle.isSmokeSource) {
+            smokeRate += obstacle.smokeRate * dt * obstacle.smokeRateMultiplier;
+            dT += obstacle.temperature - smokeMap[id.xy].a;
+            ++smokeContribution;
+        }
     }
+
+    if (smokeContribution > 0) {
+        smokeRate /= smokeContribution;
+        dT /= smokeContribution;
+        smokeMap[id.xy] += float4(smokeRate, dT);
+    }
+}
+
+[numthreads(8, 8, 1)]
+void UpdateVelocitySources(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+
+    bool isEdgeLeft = ((uint)cellType[id.xy].z & (1 << EDGE_LEFT_BIT_POS)) != 0;
+    bool isEdgeBottom = ((uint)cellType[id.xy].z & (1 << EDGE_BOTTOM_BIT_POS)) != 0;
+
+    if (isEdgeLeft) {
+        uint2 obstacleCoords = GetCellType(id.x, id.y) == CELL_TYPE_SOLID ? id.xy : ClampCoordinates(id.x - 1, id.y);
+        int obstacleIndex = cellType[obstacleCoords].y;
+
+        if (obstacleIndex >= 0) {
+            ObstacleData obstacle = obstacleData[obstacleIndex];
+            float2 v = velocityMap[id.xy];
+            v.x += obstacle.velocitySource.x * dt;
+            velocityMap[id.xy] = v;
+        }
+    }
+
+    if (isEdgeBottom) {
+        uint2 obstacleCoords = GetCellType(id.x, id.y) == CELL_TYPE_SOLID ? id.xy : ClampCoordinates(id.x, id.y - 1);
+        int obstacleIndex = cellType[obstacleCoords].y;
+
+        if (obstacleIndex >= 0) {
+            ObstacleData obstacle = obstacleData[obstacleIndex];
+            float2 v = velocityMap[id.xy];
+            v.y += obstacle.velocitySource.y * dt;
+            velocityMap[id.xy] = v;
+        }
+    }
+
+    velocityMapAdvected[id.xy] = 0;
 }
 
 

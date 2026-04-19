@@ -153,14 +153,19 @@ public class FluidSimulation {
     /// Run a single step of the fluid simulation
     /// </summary>
     public void RunStep() {
+        // Since the fluid may be divergent it is needed to remove the divergence
+        // based on pressure differences
+        gridManager.SolvePressure(solverIterations, timeStep);
+        gridManager.UpdateVelocities(timeStep);
+
+        // For advection the fluid is required to be divergence free
+        // so this step is done immediately after the pressure correction
         gridManager.AdvectSmoke(timeStep);
         gridManager.AdvectVelocities(timeStep);
 
+        // Any other step may increase the divergence of the fluid
         gridManager.AddSmokeFromSources(timeStep);
         gridManager.AddBuoyancyForce(timeStep);
-
-        gridManager.SolvePressure(solverIterations, timeStep);
-        gridManager.UpdateVelocities(timeStep);
     }
 
     public void HandleInput() {

@@ -20,6 +20,7 @@ public class FluidGridManager {
         UpdateObstacles,
         UpdateObstacleEdges,
         UpdateSmokeSources,
+        UpdateVelocitySources,
         ClearObstacles
     }
 
@@ -174,6 +175,7 @@ public class FluidGridManager {
     public void AddSmokeFromSources(float dt) {
         compute.SetFloat("dt", dt);
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateSmokeSources);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateVelocitySources);
     }
 
     /// <summary>

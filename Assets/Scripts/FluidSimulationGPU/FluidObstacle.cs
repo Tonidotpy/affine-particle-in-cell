@@ -11,6 +11,7 @@ namespace FluidSimulationGPU {
 public class FluidObstacle : MonoBehaviour {
     public struct ObstacleData {
         public bool isSmokeSource;
+        public Vector2 velocityRate;
         public float smokeRateMultiplier;
         public Vector3 smokeRate;
         public float temperature;
@@ -30,6 +31,7 @@ public class FluidObstacle : MonoBehaviour {
     MeshRenderer meshRenderer;
 
     public bool isSmokeSource;
+    public Vector2 velocityRate;
     [Min(0f)]
     public float smokeRateMultiplier = 1;
     public Vector3 smokeRate; // Amount of smoke per second
@@ -57,6 +59,7 @@ public class FluidObstacle : MonoBehaviour {
     public ObstacleData GetObstacleData() {
         return new ObstacleData {
             isSmokeSource = isSmokeSource,
+            velocityRate = velocityRate,
             smokeRateMultiplier = smokeRateMultiplier,
             smokeRate = smokeRate,
             temperature = Temperature, // !!! Use K instead of °C !!!
