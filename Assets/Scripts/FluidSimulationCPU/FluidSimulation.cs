@@ -5,7 +5,9 @@ namespace FluidSimulationCPU {
 /// Eulerian fluid simulation based on a staggered Grid
 /// </summary>
 public class FluidSimulation {
+    FluidParcels parcels;
     FluidGridMac grid;
+
     float fluidDensity = 1.3f;       // kg/m^2
     float ambientTemperature = 300f; // K
     Vector2[] externalAccelerations; // m/s^2
@@ -24,6 +26,13 @@ public class FluidSimulation {
     /// </summary>
     public FluidGridMac Grid {
         get { return grid; }
+    }
+
+    /// <summary>
+    /// Get the fluid Parcels object
+    /// </summary>
+    public FluidParcels Parcels {
+        get { return parcels; }
     }
 
     /// <summary>
@@ -89,7 +98,8 @@ public class FluidSimulation {
     /// </summary>
     public Vector2 Gravity { get; set; }
 
-    public FluidSimulation(int gridWidth, int gridHeight) {
+    public FluidSimulation(int gridWidth, int gridHeight, int parcelsCount) {
+        parcels = new FluidParcels(parcelsCount);
         grid = new FluidGridMac(gridWidth, gridHeight);
 
         for (int i = 0; i < gridWidth; ++i) {
@@ -107,13 +117,11 @@ public class FluidSimulation {
     public void RunStep() {
         UpdateGridParameters();
 
-        // Advect quantities -> fluid MUST BE divergence free
-        grid.AdvectVelocities(timeStep);
-        grid.AdvectTemperature(timeStep);
-        grid.AdvectSmoke(timeStep);
+        grid.TransferParcelsData(parcels);
+        return;
 
         // Add buoyancy forces -> fluid has non-zero divergence
-        grid.AddBuoyancyForce(timeStep);
+        // grid.AddBuoyancyForce(timeStep);
 
         // Add forces -> fluid has non-zero divergence (replaced by buoyancy)
         // externalAccelerations[0] = Gravity;
@@ -122,6 +130,13 @@ public class FluidSimulation {
         // Remove divergence based on pressure difference -> fluid becomes divergence free again
         grid.SolvePressure(solverIterations, timeStep);
         grid.UpdateVelocities(timeStep);
+
+        parcels.TransferGridData(grid);
+
+        // Advect quantities -> fluid MUST BE divergence free
+        // grid.AdvectVelocities(timeStep);
+        // grid.AdvectTemperature(timeStep);
+        // grid.AdvectSmoke(timeStep);
     }
 
     void UpdateGridParameters() {

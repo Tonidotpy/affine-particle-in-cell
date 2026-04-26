@@ -308,6 +308,152 @@ public class FluidGridMac {
     }
 
     /// <summary>
+    /// Transfer parcels data to the grid such as the mass and velocities
+    /// </summary>
+    /// <param name="parcels">The parcels object containing the data to transfer</param>
+    public void TransferParcelsData(FluidParcels parcels) {
+        TransferMass(parcels);
+        TransferMomentum(parcels);
+    }
+
+    void TransferMass(FluidParcels parcels) {
+        ClearSmoke();
+        for (int i = 0; i < parcels.count; ++i) {
+            float m = parcels.mass[i];
+            Vector2 p = parcels.position[i];
+
+            int x = Mathf.FloorToInt(p.x);
+            int y = Mathf.FloorToInt(p.y);
+            float dx = p.x - x;
+            float dy = p.y - y;
+            float wBottomLeft  = (1f - dx) * (1f - dy);
+            float wBottomRight = (     dx) * (1f - dy);
+            float wTopLeft     = (1f - dx) * (     dy);
+            float wTopRight    = (     dx) * (     dy);
+            if (IsInCellCenterBounds(x    , y    )) smokeMap[x    , y    ] += m * wBottomLeft;
+            if (IsInCellCenterBounds(x + 1, y    )) smokeMap[x + 1, y    ] += m * wBottomRight;
+            if (IsInCellCenterBounds(x    , y + 1)) smokeMap[x    , y + 1] += m * wTopLeft;
+            if (IsInCellCenterBounds(x + 1, y + 1)) smokeMap[x + 1, y + 1] += m * wTopRight;
+        }
+    }
+
+    void TransferMomentum(FluidParcels parcels) {
+        ClearVelocities();
+        for (int i = 0; i < parcels.count; ++i) {
+            float m = parcels.mass[i];
+            Vector2 v = parcels.velocity[i];
+            Vector2 p = parcels.position[i];
+
+            // Horizontal axis
+            {
+                int x = Mathf.RoundToInt(p.x);
+                int y = Mathf.FloorToInt(p.y);
+
+                float xLeft = x - 0.5f;
+                float xRight = x + 0.5f;
+                Vector2 cx = parcels.cx[i];
+
+                Vector2 dpBottomLeft = new Vector2(xLeft - p.x, y - p.y);
+                Vector2 dpBottomRight = new Vector2(xRight - p.x, y - p.y);
+                Vector2 dpTopLeft = new Vector2(xLeft - p.x, y + 1 - p.y);
+                Vector2 dpTopRight = new Vector2(xRight - p.x, y + 1 - p.y);
+
+                float wBottomLeft  = (     dpTopRight.x) * (     dpTopRight.y);
+                float wBottomRight = (1f - dpTopRight.x) * (     dpTopRight.y);
+                float wTopLeft     = (     dpTopRight.x) * (1f - dpTopRight.y);
+                float wTopRight    = (1f - dpTopRight.x) * (1f - dpTopRight.y);
+
+                float vBottomLeft = GetVelocity(velocityU, xLeft, y, Axis.X);
+                vBottomLeft += m * wBottomLeft * (v.x + Vector2.Dot(cx, dpBottomLeft));
+                SetVelocity(velocityU, xLeft, y, Axis.X, vBottomLeft);
+
+                float vBottomRight = GetVelocity(velocityU, xRight, y, Axis.X);
+                vBottomRight += m * wBottomRight * (v.x + Vector2.Dot(cx, dpBottomRight));
+                SetVelocity(velocityU, xRight, y, Axis.X, vBottomRight);
+
+                float vTopLeft = GetVelocity(velocityU, xLeft, y + 1f, Axis.X);
+                vTopLeft += m * wTopLeft * (v.x + Vector2.Dot(cx, dpTopLeft));
+                SetVelocity(velocityU, xLeft, y + 1f, Axis.X, vTopLeft);
+
+                float vTopRight = GetVelocity(velocityU, xRight, y + 1f, Axis.X);
+                vTopRight += m * wTopRight * (v.x + Vector2.Dot(cx, dpTopRight));
+                SetVelocity(velocityU, xRight, y + 1f, Axis.X, vTopRight);
+            }
+
+            // Vertical axis
+            {
+                int x = Mathf.FloorToInt(p.x);
+                int y = Mathf.RoundToInt(p.y);
+
+                float yBottom = y - 0.5f;
+                float yTop = y + 0.5f;
+                Vector2 cy = parcels.cy[i];
+
+                Vector2 dpBottomLeft = new Vector2(x - p.x, yBottom - p.y);
+                Vector2 dpBottomRight = new Vector2(x + 1 - p.x, yBottom - p.y);
+                Vector2 dpTopLeft = new Vector2(x - p.x, yTop - p.y);
+                Vector2 dpTopRight = new Vector2(x + 1 - p.x, yTop - p.y);
+
+                float wBottomLeft  = (     dpTopRight.x) * (     dpTopRight.y);
+                float wBottomRight = (1f - dpTopRight.x) * (     dpTopRight.y);
+                float wTopLeft     = (     dpTopRight.x) * (1f - dpTopRight.y);
+                float wTopRight    = (1f - dpTopRight.x) * (1f - dpTopRight.y);
+
+                float vBottomLeft = GetVelocity(velocityV, x, yBottom, Axis.Y);
+                vBottomLeft += m * wBottomLeft * (v.y + Vector2.Dot(cy, dpBottomLeft));
+                SetVelocity(velocityV, x, yBottom, Axis.Y, vBottomLeft);
+
+                float vBottomRight = GetVelocity(velocityV, x + 1f, yBottom, Axis.Y);
+                vBottomRight += m * wBottomRight * (v.y + Vector2.Dot(cy, dpBottomRight));
+                SetVelocity(velocityV, x + 1, yBottom, Axis.Y, vBottomRight);
+
+                float vTopLeft = GetVelocity(velocityV, x, yTop, Axis.Y);
+                vTopLeft += m * wTopLeft * (v.y + Vector2.Dot(cy, dpTopLeft));
+                SetVelocity(velocityV, x, yTop, Axis.Y, vTopLeft);
+
+                float vTopRight = GetVelocity(velocityV, x + 1, yTop, Axis.Y);
+                vTopRight += m * wTopRight * (v.y + Vector2.Dot(cy, dpTopRight));
+                SetVelocity(velocityV, x + 1, yTop, Axis.Y, vTopRight);
+            }
+        }
+        TransferVelocities(parcels);
+    }
+
+    void TransferVelocities(FluidParcels parcels) {
+        for (int j = 0; j < velocityU.GetLength(1); ++j) {
+            for (int i = 0; i < velocityU.GetLength(0); ++i) {
+                float x = i - 0.5f;
+                float y = j;
+
+                float m0 = GetCellCenterValue(smokeMap, i - 1, j, 0f);
+                float m1 = GetCellCenterValue(smokeMap, i, j, 0f);
+                float m = (m0 + m1) * 0.5f;
+
+                if (m > 0) {
+                    float u = GetVelocity(velocityU, x, y, Axis.X) / m;
+                    SetVelocity(velocityU, x, y, Axis.X, u);
+                }
+            }
+        }
+
+        for (int i = 0; i < velocityV.GetLength(0); ++i) {
+            for (int j = 0; j < velocityV.GetLength(1); ++j) {
+                float x = i;
+                float y = j - 0.5f;
+
+                float m0 = GetCellCenterValue(smokeMap, i, j - 1, 0f);
+                float m1 = GetCellCenterValue(smokeMap, i, j, 0f);
+                float m = (m0 + m1) * 0.5f;
+
+                if (m > 0) {
+                    float v = GetVelocity(velocityV, x, y, Axis.Y) / m;
+                    SetVelocity(velocityV, x, y, Axis.Y, v);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Calculate pressure values needed to remove divergence of fluid
     /// using the Gauss-Seidel method with SOR
     /// </summary>

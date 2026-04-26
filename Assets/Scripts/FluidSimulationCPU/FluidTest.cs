@@ -11,6 +11,7 @@ public class FluidTest : MonoBehaviour {
     [Header("Grid Settings")]
     public int width = 5;
     public int height = 5;
+    public int parcelsCount = 50;
     public float fluidDensity = 1.3f; // kg/m^2
 
     [Header("Simulation Settings")]
@@ -51,9 +52,10 @@ public class FluidTest : MonoBehaviour {
 
     void Start() {
         simulationRenderer = GetComponent<FluidRenderer>();
-        simulation = new FluidSimulation(width, height);
+        simulation = new FluidSimulation(width, height, parcelsCount);
 
         simulationRenderer.SetGridToRender(simulation.Grid);
+        simulationRenderer.SetParcelsToRender(simulation.Parcels);
 
         Camera.main.orthographicSize = height * simulationRenderer.CellSize * 0.6f;
 
