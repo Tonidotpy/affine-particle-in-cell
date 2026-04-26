@@ -118,7 +118,6 @@ public class FluidSimulation {
         UpdateGridParameters();
 
         grid.TransferParcelsData(parcels);
-        return;
 
         // Add buoyancy forces -> fluid has non-zero divergence
         // grid.AddBuoyancyForce(timeStep);
