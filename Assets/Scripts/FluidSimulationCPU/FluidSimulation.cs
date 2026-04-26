@@ -131,6 +131,7 @@ public class FluidSimulation {
         grid.UpdateVelocities(timeStep);
 
         parcels.TransferGridData(grid);
+        parcels.Advect(grid, timeStep);
 
         // Advect quantities -> fluid MUST BE divergence free
         // grid.AdvectVelocities(timeStep);

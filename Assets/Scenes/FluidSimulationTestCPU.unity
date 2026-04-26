@@ -137,7 +137,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &418967680
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -240,7 +240,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &511096282
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -435,7 +435,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1548918894
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -565,7 +565,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 21db04e1edbf6a63992b47a0ad6047ab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidTest
-  visualizationMode: 6
+  visualizationMode: 1
   fontSize: 0.18
   inputRadius: 2
   inputColor: {r: 1, g: 1, b: 1, a: 0.3}
@@ -573,6 +573,11 @@ MonoBehaviour:
   CellSize: 1
   cellBorderThickness: 0
   gridColor: {r: 0.21568628, g: 0.21568628, b: 0.21568628, a: 0.39215687}
+  showParcelsVelocity: 1
+  parcelsVelocityColor: {r: 0, g: 0, b: 1, a: 1}
+  parcelsVelocityPointRadius: 0.07
+  parcelsVelocityArrowLengthFactor: 0.3
+  parcelsVelocityArrowThickness: 0.04
   velocityUColor: {r: 1, g: 0, b: 0, a: 1}
   velocityVColor: {r: 0, g: 1, b: 0, a: 1}
   velocityPointRadius: 0.07
@@ -621,7 +626,7 @@ MonoBehaviour:
   temperatureDisplayRange: 50
   coldTemperatureColor: {r: 0.3, g: 0.3, b: 1, a: 0.7}
   hotTemperatureColor: {r: 1, g: 0.3, b: 0.3, a: 0.7}
-  showSmokeValue: 0
+  showSmokeValue: 1
   smokeDisplayRange: 1
   smokeColor: {r: 0.8867924, g: 0.8867924, b: 0.8867924, a: 1}
 --- !u!114 &1620029914
@@ -636,8 +641,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b82d6dc2ba9f5749bac9d2fe0be6adb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidRenderer
-  width: 50
-  height: 35
+  width: 11
+  height: 11
+  parcelsCount: 20
   fluidDensity: 1.3
   solverIterations: 15
   sor: 1.7
