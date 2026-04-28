@@ -26,7 +26,7 @@ public class FluidParcels {
         for (int i = 0; i < count; ++i) {
             mass[i] = 1f;
             position[i] = new Vector2((7f / count) * i + 1f, 8f); // Random.insideUnitCircle + Vector2.one * 2;
-            velocity[i] = Random.insideUnitCircle * 5f;
+            velocity[i] = Random.insideUnitCircle;
         }
     }
 
@@ -78,7 +78,7 @@ public class FluidParcels {
                 v.y += wTopLeft * grid.GetVelocity(grid.velocityV, x, yTop, FluidGridMac.Axis.Y);
                 v.y += wTopRight * grid.GetVelocity(grid.velocityV, x + 1, yTop, FluidGridMac.Axis.Y);
             }
-            velocity[i] = v;
+            velocity[i] = v * 0.25f;
         }
     }
 
@@ -142,10 +142,11 @@ public class FluidParcels {
             Vector2 k3 = grid.SampleVelocity(p + k2 * (dt * 0.5f));
             Vector2 k4 = grid.SampleVelocity(p + k3 * dt);
 
+            // RK4
             Vector2 pNext = p + (dt / 6f) * (k1 + 2 * k2 + 2 * k3 + k4);
             position[i] = new Vector2(
-                Mathf.Clamp(pNext.x, 0, grid.width),
-                Mathf.Clamp(pNext.y, 0, grid.height)
+                Mathf.Clamp(pNext.x, 0.5f, grid.width - 1.5f),
+                Mathf.Clamp(pNext.y, 0.5f, grid.height - 1.5f)
             );
         }
     }

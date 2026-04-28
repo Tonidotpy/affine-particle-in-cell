@@ -17,7 +17,7 @@ public class FluidSimulation {
     /// <summary>
     /// Simulation time step in seconds
     /// </summary>
-    float timeStep => 1f / (60f * timeStepMultiplier);
+    float timeStep => 1f / Mathf.Max(60f * timeStepMultiplier, grid.MaxVelocity * 1.1f);
     float timeStepMultiplier = 1;
     int solverIterations = 1;
 

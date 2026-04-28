@@ -1,6 +1,7 @@
 using UnityEngine;
 using static UnityEngine.Mathf;
 using System;
+using System.Linq;
 
 namespace FluidSimulationCPU {
 /// <summary>
@@ -107,6 +108,8 @@ public class FluidGridMac {
     public readonly float[,] temperatureNext;
     public readonly float[,] smokeMap;
     public readonly float[,] smokeMapNext;
+    public readonly float[,] massEdgeU;
+    public readonly float[,] massEdgeV;
 
     /// <summary>
     /// Successive Over-Relaxation multiplier used for Gauss-Seidel
@@ -135,6 +138,11 @@ public class FluidGridMac {
     /// </summary>
     public float TemperatureBuoyancyMultiplier { get; set; }
 
+    public float MaxVelocity => Mathf.Max(
+        velocityU.Cast<float>().Select(Mathf.Abs).Max(),
+        velocityV.Cast<float>().Select(Mathf.Abs).Max()
+    );
+
     public FluidGridMac(int width, int height) {
         this.width = width;
         this.height = height;
@@ -157,6 +165,8 @@ public class FluidGridMac {
         temperatureNext = new float[width, height];
         smokeMap = new float[width, height];
         smokeMapNext = new float[width, height];
+        massEdgeU = new float[width + 1, height];
+        massEdgeV = new float[width, height + 1];
 
         SetExternalBoundaries();
     }
@@ -318,22 +328,86 @@ public class FluidGridMac {
 
     void TransferMass(FluidParcels parcels) {
         ClearSmoke();
+        AccumulateCellCenterMass(parcels);
+        AccumulateCellEdgesMass(parcels);
+    }
+
+    void AccumulateCellCenterMass(FluidParcels parcels) {
         for (int i = 0; i < parcels.count; ++i) {
             float m = parcels.mass[i];
             Vector2 p = parcels.position[i];
 
-            int x = Mathf.FloorToInt(p.x);
-            int y = Mathf.FloorToInt(p.y);
-            float dx = p.x - x;
-            float dy = p.y - y;
-            float wBottomLeft  = (1f - dx) * (1f - dy);
-            float wBottomRight = (     dx) * (1f - dy);
-            float wTopLeft     = (1f - dx) * (     dy);
-            float wTopRight    = (     dx) * (     dy);
-            if (IsInCellCenterBounds(x    , y    )) smokeMap[x    , y    ] += m * wBottomLeft;
-            if (IsInCellCenterBounds(x + 1, y    )) smokeMap[x + 1, y    ] += m * wBottomRight;
-            if (IsInCellCenterBounds(x    , y + 1)) smokeMap[x    , y + 1] += m * wTopLeft;
-            if (IsInCellCenterBounds(x + 1, y + 1)) smokeMap[x + 1, y + 1] += m * wTopRight;
+            int xCell = Mathf.FloorToInt(p.x);
+            int yCell = Mathf.FloorToInt(p.y);
+            float dx = p.x - xCell;
+            float dy = p.y - yCell;
+
+            int[] x = { xCell, xCell + 1, xCell, xCell + 1 };
+            int[] y = { yCell, yCell, yCell + 1, yCell + 1 };
+            float[] weights = {
+                (1f - dx) * (1f - dy),
+                (     dx) * (1f - dy),
+                (1f - dx) * (     dy),
+                (     dx) * (     dy)
+            };
+            for (int j = 0; j < 4; ++j) {
+                if (IsInCellCenterBounds(x[j], y[j]))
+                    smokeMap[x[j], y[j]] += m * weights[j];
+            }
+        }
+    }
+
+    void AccumulateCellEdgesMass(FluidParcels parcels) {
+        for (int i = 0; i < parcels.count; ++i) {
+            float m = parcels.mass[i];
+            Vector2 p = parcels.position[i];
+
+            // Horizontal axis
+            {
+                int xEdge = Mathf.RoundToInt(p.x);
+                int yCell = Mathf.FloorToInt(p.y);
+                float xLeft = xEdge - 0.5f;
+
+                float dx = p.x - xLeft;
+                float dy = p.y - yCell;
+
+                float[] x = { xLeft, xLeft + 1, xLeft, xLeft + 1 };
+                float[] y = { yCell, yCell, yCell + 1, yCell + 1 };
+                float[] weights = {
+                    (1f - dx) * (1f - dy),
+                    (     dx) * (1f - dy),
+                    (1f - dx) * (     dy),
+                    (     dx) * (     dy)
+                };
+                for (int j = 0; j < 4; ++j) {
+                    float mass = GetVelocity(massEdgeU, x[j], y[j], Axis.X);
+                    mass += m * weights[j];
+                    SetVelocity(massEdgeU, x[j], y[j], Axis.X, mass);
+                }
+            }
+            // Vertical axis
+            {
+                int xCell = Mathf.FloorToInt(p.x);
+                int yEdge = Mathf.RoundToInt(p.y);
+                float yBottom = yEdge - 0.5f;
+
+                float dx = p.x - xCell;
+                float dy = p.y - yBottom;
+
+                float[] x = { xCell, xCell + 1, xCell, xCell + 1 };
+                float[] y = { yBottom, yBottom, yBottom + 1, yBottom + 1 };
+                float[] weights = {
+                    (1f - dx) * (1f - dy),
+                    (     dx) * (1f - dy),
+                    (1f - dx) * (     dy),
+                    (     dx) * (     dy)
+                };
+                for (int j = 0; j < 4; ++j) {
+                    float mass = GetVelocity(massEdgeV, x[j], y[j], Axis.Y);
+                    mass += m * weights[j];
+                    SetVelocity(massEdgeV, x[j], y[j], Axis.Y, mass);
+                }
+            }
         }
     }
 
@@ -425,10 +499,7 @@ public class FluidGridMac {
                 float x = i - 0.5f;
                 float y = j;
 
-                float m0 = GetCellCenterValue(smokeMap, i - 1, j, 0f);
-                float m1 = GetCellCenterValue(smokeMap, i, j, 0f);
-                float m = (m0 + m1) * 0.5f;
-
+                float m = GetVelocity(massEdgeU, x, y, Axis.X);
                 if (m > 0) {
                     float u = GetVelocity(velocityU, x, y, Axis.X) / m;
                     SetVelocity(velocityU, x, y, Axis.X, u);
@@ -441,10 +512,7 @@ public class FluidGridMac {
                 float x = i;
                 float y = j - 0.5f;
 
-                float m0 = GetCellCenterValue(smokeMap, i, j - 1, 0f);
-                float m1 = GetCellCenterValue(smokeMap, i, j, 0f);
-                float m = (m0 + m1) * 0.5f;
-
+                float m = GetVelocity(massEdgeV, x, y, Axis.Y);
                 if (m > 0) {
                     float v = GetVelocity(velocityV, x, y, Axis.Y) / m;
                     SetVelocity(velocityV, x, y, Axis.Y, v);
@@ -489,8 +557,12 @@ public class FluidGridMac {
                 float velocityTerm = (velocityTop - velocityBottom + velocityRight - velocityLeft) / dt;
 
                 pressureSolverData[i, j] = new PressureSolverData() {
-                    flowTop = flowTop,   flowBottom = flowBottom,       flowRight = flowRight,
-                    flowLeft = flowLeft, flowEdgeCount = flowEdgeCount, velocityTerm = velocityTerm
+                    flowTop = flowTop,
+                    flowBottom = flowBottom,
+                    flowRight = flowRight,
+                    flowLeft = flowLeft,
+                    flowEdgeCount = flowEdgeCount,
+                    velocityTerm = velocityTerm
                 };
             }
         }
@@ -881,6 +953,8 @@ public class FluidGridMac {
     /// </summary>
     public void ClearSmoke() {
         Array.Clear(smokeMap, 0, smokeMap.Length);
+        Array.Clear(massEdgeU, 0, massEdgeU.Length);
+        Array.Clear(massEdgeV, 0, massEdgeV.Length);
     }
 
     /// <summary>

@@ -643,7 +643,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidRenderer
   width: 11
   height: 11
-  parcelsCount: 20
+  parcelsCount: 100
   fluidDensity: 1.3
   solverIterations: 15
   sor: 1.7
