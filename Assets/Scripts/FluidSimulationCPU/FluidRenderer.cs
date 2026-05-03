@@ -44,7 +44,9 @@ public class FluidRenderer : MonoBehaviour {
     public Color gridColor = new Color(0.2156862745f, 0.2156862745f, 0.2156862745f);
 
     [Header("Parcels settings")]
+    public bool showParcels = false;
     public bool showParcelsVelocity = false;
+    public Color parcelsColor = new Color(0f, 0f, 1f);
     public Color parcelsVelocityColor = new Color(0f, 0f, 1f);
     public float parcelsVelocityPointRadius = 0.07f;
     public float parcelsVelocityArrowLengthFactor = 0.3f;
@@ -150,7 +152,8 @@ public class FluidRenderer : MonoBehaviour {
         Draw.StartLayerIfNotInMatching(Vector2.zero, 1, false);
 
         RenderGrid();
-        RenderParcels();
+        if (showParcels)
+            RenderParcels();
         if (visualizationMode == VisualizationMode.Velocity)
             RenderVelocities();
 
@@ -180,7 +183,7 @@ public class FluidRenderer : MonoBehaviour {
             Vector2 pos = parcels.position[i];
             Vector2 vel = parcels.velocity[i];
             Vector2 coords = CellCenterToWorld(pos.x, pos.y);
-            Draw.Point(coords, Mathf.Sqrt(grid.width * grid.height) * 0.01f, Color.white);
+            Draw.Point(coords, Mathf.Sqrt(grid.width * grid.height) * 0.01f, parcelsColor);
             if (showParcelsVelocity) {
                 RenderVelocityArrow(CellCenterToWorld(pos.x, pos.y), vel, parcelsVelocityColor, parcelsVelocityPointRadius,
                             parcelsVelocityArrowLengthFactor, parcelsVelocityArrowThickness);
@@ -239,7 +242,7 @@ public class FluidRenderer : MonoBehaviour {
         case VisualizationMode.Smoke:
             if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
                 break;
-            float smoke = grid.smokeMap[i, j];
+            float smoke = grid.mass[i, j];
             float smokeT = Mathf.Clamp01(smoke / smokeDisplayRange);
             col = Color.Lerp(col, smokeColor, smokeT);
             if (showSmokeValue)

@@ -26,18 +26,12 @@ public class FluidGridMac {
     /// <summary>
     /// Grid axis: X is horizontal, Y is vertical
     /// </summary>
-    public enum Axis {
-        X,
-        Y
-    }
+    public enum Axis { X, Y }
 
     /// <summary>
     /// Cell type: represents the content of the cell
     /// </summary>
-    public enum CellType {
-        Fluid,
-        Solid,
-    }
+    public enum CellType { Fluid, Solid }
 
     /// <summary>
     /// Data needed to solve the pressure equation using the Gauss-Seidel method
@@ -106,8 +100,8 @@ public class FluidGridMac {
 
     public readonly float[,] temperature;
     public readonly float[,] temperatureNext;
-    public readonly float[,] smokeMap;
-    public readonly float[,] smokeMapNext;
+    public readonly float[,] mass;
+    public readonly float[,] massNext;
     public readonly float[,] massEdgeU;
     public readonly float[,] massEdgeV;
 
@@ -163,8 +157,8 @@ public class FluidGridMac {
 
         temperature = new float[width, height];
         temperatureNext = new float[width, height];
-        smokeMap = new float[width, height];
-        smokeMapNext = new float[width, height];
+        mass = new float[width, height];
+        massNext = new float[width, height];
         massEdgeU = new float[width + 1, height];
         massEdgeV = new float[width, height + 1];
 
@@ -265,7 +259,7 @@ public class FluidGridMac {
     /// <param name="j">Cell coordinate on the vertical axis</param>
     /// <returns>Temperature of the cell at coordinate i and j</returns>
     public float GetSmoke(int i, int j) {
-        return GetCellCenterValue(smokeMap, i, j, 0f);
+        return GetCellCenterValue(mass, i, j, 0f);
     }
 
     /// <summary>
@@ -352,7 +346,7 @@ public class FluidGridMac {
             };
             for (int j = 0; j < 4; ++j) {
                 if (IsInCellCenterBounds(x[j], y[j]))
-                    smokeMap[x[j], y[j]] += m * weights[j];
+                    mass[x[j], y[j]] += m * weights[j];
             }
         }
     }
@@ -900,11 +894,11 @@ public class FluidGridMac {
                 Vector2 position = new Vector2(i, j);
                 Vector2 velocity = SampleVelocity(position);
                 Vector2 positionPrev = position - velocity * dt;
-                smokeMapNext[i, j] = SampleBilinearCellCenter(smokeMap, positionPrev);
+                massNext[i, j] = SampleBilinearCellCenter(mass, positionPrev);
             }
         }
 
-        Array.Copy(smokeMapNext, smokeMap, smokeMap.Length);
+        Array.Copy(massNext, mass, mass.Length);
     }
 
     /// <summary>
@@ -926,7 +920,7 @@ public class FluidGridMac {
                     float distance = Vector2.Distance(position, center);
                     if (distance <= radius) {
                         float fallof = 1f - (distance / radius);
-                        smokeMap[i, j] += amount * fallof;
+                        mass[i, j] += amount * fallof;
                     }
                 }
             }
@@ -952,7 +946,7 @@ public class FluidGridMac {
     /// Clear all smoke values setting them to 0
     /// </summary>
     public void ClearSmoke() {
-        Array.Clear(smokeMap, 0, smokeMap.Length);
+        Array.Clear(mass, 0, mass.Length);
         Array.Clear(massEdgeU, 0, massEdgeU.Length);
         Array.Clear(massEdgeV, 0, massEdgeV.Length);
     }

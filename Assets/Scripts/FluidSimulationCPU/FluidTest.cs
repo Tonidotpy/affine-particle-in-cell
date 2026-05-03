@@ -47,7 +47,8 @@ public class FluidTest : MonoBehaviour {
         S: Update fluid obstacles in the Grid
         Z: Clear all the obstacles
         MouseLeft: Add velocity
-        MouseRight: Add smoke");
+        MouseRight: Add smoke
+        Shift+MouseRight: Remove smoke");
     }
 
     void Start() {
@@ -113,37 +114,37 @@ public class FluidTest : MonoBehaviour {
         }
 
         if (isMouseLeftHeld) {
-            Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
-
             Vector2 mouseDelta = mousePosition - mousePositionOld;
-            int offset = CeilToInt(mouseInputRadius);
-            for (int offy = -offset; offy <= offset; ++offy) {
-                for (int offx = -offset; offx <= offset; ++offx) {
-                    int i = cellCenter.x + offx;
-                    int j = cellCenter.y + offy;
-                    if (i < 0 || i >= width || j < 0 || j >= height)
-                        continue;
+            FluidParcels parcels = simulation.Parcels;
+            for (int i = 0; i < parcels.count; ++i) {
+                Vector2 p = parcels.position[i];
+                Vector2 position = simulationRenderer.CellCenterToWorld(p.x, p.y);
+                float sqrDistance = (position - mousePosition).sqrMagnitude;
+                float sqrRadius = mouseInputRadius * mouseInputRadius;
 
-                    Vector2 cellPosition = simulationRenderer.CellCenterToWorld(i, j);
-                    float sqrRadius = mouseInputRadius * mouseInputRadius;
-                    float weight = 1 - Mathf.Clamp01((cellPosition - mousePosition).sqrMagnitude / sqrRadius);
-                    FluidGridMac grid = simulation.Grid;
-
-                    float x = i;
-                    float y = j;
+                if (sqrDistance <= sqrRadius) {
+                    float weight = 1f - Mathf.Clamp01(sqrDistance / sqrRadius);
                     Vector2 velocityDelta = mouseDelta * weight * velocityStrenght;
-                    float newVelocityU =
-                        grid.GetVelocity(grid.velocityU, x - 0.5f, y, FluidGridMac.Axis.X) + velocityDelta.x;
-                    float newVelocityV =
-                        grid.GetVelocity(grid.velocityV, x, y - 0.5f, FluidGridMac.Axis.Y) + velocityDelta.y;
-                    grid.SetVelocity(grid.velocityU, x - 0.5f, y, FluidGridMac.Axis.X, newVelocityU);
-                    grid.SetVelocity(grid.velocityV, x, y - 0.5f, FluidGridMac.Axis.Y, newVelocityV);
+                    parcels.velocity[i] += velocityDelta;
                 }
             }
         }
         if (isMouseRightHeld) {
-            Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
-            simulation.Grid.AddSmokeAtPosition(cellCenter, smokeAmount, mouseInputRadius);
+            FluidParcels parcels = simulation.Parcels;
+            for (int i = 0; i < parcels.count; ++i) {
+                Vector2 p = parcels.position[i];
+                Vector2 position = simulationRenderer.CellCenterToWorld(p.x, p.y);
+                float sqrDistance = (position - mousePosition).sqrMagnitude;
+                float sqrRadius = mouseInputRadius * mouseInputRadius;
+
+                if (sqrDistance <= sqrRadius) {
+                    float weight = 1f - Mathf.Clamp01(sqrDistance / sqrRadius);
+                    float massDelta = weight * smokeAmount;
+                    float mass = parcels.mass[i];
+                    mass += InputHelper.ShiftIsHeld ? -massDelta : massDelta;
+                    parcels.mass[i] = Mathf.Max(1f, mass);
+                }
+            }
         }
 
         simulationRenderer.inputRadius = Mathf.Max(0, simulationRenderer.inputRadius + mouseScrollDelta * 0.1f);

@@ -123,17 +123,17 @@ public class FluidSimulation {
         // grid.AddBuoyancyForce(timeStep);
 
         // Add forces -> fluid has non-zero divergence (replaced by buoyancy)
-        // externalAccelerations[0] = Gravity;
-        // grid.AddExternalBodyForce(externalAccelerations, timeStep);
+        externalAccelerations[0] = Gravity;
+        grid.AddExternalBodyForce(externalAccelerations, timeStep);
 
         // Remove divergence based on pressure difference -> fluid becomes divergence free again
         grid.SolvePressure(solverIterations, timeStep);
         grid.UpdateVelocities(timeStep);
 
+        // Advect quantities -> fluid MUST BE divergence free
         parcels.TransferGridData(grid);
         parcels.Advect(grid, timeStep);
 
-        // Advect quantities -> fluid MUST BE divergence free
         // grid.AdvectVelocities(timeStep);
         // grid.AdvectTemperature(timeStep);
         // grid.AdvectSmoke(timeStep);
