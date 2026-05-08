@@ -90,6 +90,11 @@ public class FluidGridMac {
     public readonly int width;
     public readonly int height;
 
+    public bool closeLeftEdge = false;
+    public bool closeBottomEdge = false;
+    public bool closeRightEdge = false;
+    public bool closeTopEdge = false;
+
     public readonly CellType[,] cellType;
     public readonly float[,] velocityU;
     public readonly float[,] velocityV;
@@ -171,12 +176,12 @@ public class FluidGridMac {
     void SetExternalBoundaries() {
         // Treat borders as solid
         for (int i = 0; i < width; ++i) {
-            cellType[i, 0] = CellType.Solid;
-            cellType[i, height - 1] = CellType.Solid;
+            if (closeBottomEdge) cellType[i, 0] = CellType.Solid;
+            if (closeTopEdge) cellType[i, height - 1] = CellType.Solid;
         }
         for (int j = 0; j < height; ++j) {
-            cellType[0, j] = CellType.Solid;
-            cellType[width - 1, j] = CellType.Solid;
+            if (closeLeftEdge) cellType[0, j] = CellType.Solid;
+            if (closeRightEdge) cellType[width - 1, j] = CellType.Solid;
         }
     }
 
@@ -218,24 +223,31 @@ public class FluidGridMac {
 
     /// <summary>
     /// Get Cell Type given the coordinates inside the Grid
-    /// If any of the coordinates are out of the bounds of the Grid <code>CellType.Solid</code> is returned
+    /// Cell type outside of boundaries is assumed to be the same as the one
+    /// on the nearest edge
     /// </summary>
     /// <param name="i">Cell coordinate on the horizontal axis</param>
     /// <param name="j">Cell coordinate on the vertical axis</param>
     /// <returns>Cell Type of the Cell at coordinate i and j</returns>
     public CellType GetCellType(int i, int j) {
-        return GetCellCenterValue(cellType, i, j, CellType.Solid);
+        return GetCellCenterValue(
+            cellType,
+            Mathf.Clamp(i, 0, width - 1),
+            Mathf.Clamp(j, 0, height - 1),
+            CellType.Fluid
+        );
     }
 
     /// <summary>
     /// Get Cell pressure given the coordinates inside the Grid
-    /// If any of the coordinates are out of the bounds of the Grid <code>0</code> is returned
+    /// At the Grid edges the pressure is assumed to be 0 if no solid boundary
+    /// is enforced
     /// </summary>
     /// <param name="i">Cell coordinate on the horizontal axis</param>
     /// <param name="j">Cell coordinate on the vertical axis</param>
     /// <returns>Pressure of the cell at coordinate i and j</returns>
     public float GetPressure(int i, int j) {
-        return GetCellCenterValue(pressure, i, j, 0f);
+        return GetCellCenterValue(pressure, i, j, 0);
     }
 
     /// <summary>
@@ -280,10 +292,9 @@ public class FluidGridMac {
         float yOff = axis == Axis.Y ? 0.5f : 0;
         int i = Mathf.RoundToInt(x + xOff);
         int j = Mathf.RoundToInt(y + yOff);
-
-        bool xBoundsCheck = axis == Axis.X && (i >= 0 && i < width + 1 && j >= 0 && j < height);
-        bool yBoundsCheck = axis == Axis.Y && (i >= 0 && i < width && j >= 0 && j < height + 1);
-        return (xBoundsCheck || yBoundsCheck) ? velocity[i, j] : 0;
+        i = Mathf.Clamp(i, 0, axis == Axis.X ? width : width - 1);
+        j = Mathf.Clamp(j, 0, axis == Axis.Y ? height : height - 1);
+        return velocity[i, j];
     }
 
     /// <summary>
@@ -603,16 +614,16 @@ public class FluidGridMac {
                 float x = i - 0.5f;
                 float y = j;
 
-                CellType rightType = GetCellType(i, j);
+                CellType centerType = GetCellType(i, j);
+                if (centerType == CellType.Solid) continue;
+
                 CellType leftType = GetCellType(i - 1, j);
-                if (leftType != CellType.Fluid || rightType != CellType.Fluid) {
-                    SetVelocity(velocityU, x, y, Axis.X, 0);
-                } else {
-                    float pressureRight = GetPressure(i, j);
-                    float pressureLeft = GetPressure(i - 1, j);
-                    float u = GetVelocity(velocityU, x, y, Axis.X) - k * (pressureRight - pressureLeft);
-                    SetVelocity(velocityU, x, y, Axis.X, u);
-                }
+                if (leftType == CellType.Solid) continue;
+
+                float pressureCenter = GetPressure(i, j);
+                float pressureLeft = GetPressure(i - 1, j);
+                float u = GetVelocity(velocityU, x, y, Axis.X) - k * (pressureCenter - pressureLeft);
+                SetVelocity(velocityU, x, y, Axis.X, u);
             }
         }
 
@@ -622,16 +633,16 @@ public class FluidGridMac {
                 float x = i;
                 float y = j - 0.5f;
 
-                CellType topType = GetCellType(i, j);
+                CellType centerType = GetCellType(i, j);
+                if (centerType == CellType.Solid) continue;
+
                 CellType bottomType = GetCellType(i, j - 1);
-                if (bottomType != CellType.Fluid || topType != CellType.Fluid) {
-                    SetVelocity(velocityV, x, y, Axis.Y, 0);
-                } else {
-                    float pressureTop = GetPressure(i, j);
-                    float pressureBottom = GetPressure(i, j - 1);
-                    float v = GetVelocity(velocityV, x, y, Axis.Y) - k * (pressureTop - pressureBottom);
-                    SetVelocity(velocityV, x, y, Axis.Y, v);
-                }
+                if (bottomType == CellType.Solid) continue;
+
+                float pressureCenter = GetPressure(i, j);
+                float pressureBottom = GetPressure(i, j - 1);
+                float v = GetVelocity(velocityV, x, y, Axis.Y) - k * (pressureCenter - pressureBottom);
+                SetVelocity(velocityV, x, y, Axis.Y, v);
             }
         }
     }

@@ -135,7 +135,7 @@ float GetPressure(int i, int j) {
     // have p = 0 at the boundary.
     // By linear interpolation the pressure values outside the boundaries is
     // given by the opposite of the pressure value at the edge.
-    return GetCellCenterValue(pressureMap, i, j, -pressureMap[ClampCoordinates(i, j)]);
+    return GetCellCenterValue(pressureMap, i, j, 0);
 }
 
 uint2 GetCheckerboardCellCoordinates(uint index, uint passIndex, uint2 resolution) {

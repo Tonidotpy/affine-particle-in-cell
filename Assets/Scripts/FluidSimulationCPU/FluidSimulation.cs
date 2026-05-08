@@ -17,9 +17,20 @@ public class FluidSimulation {
     /// <summary>
     /// Simulation time step in seconds
     /// </summary>
-    float timeStep => 1f / Mathf.Max(60f * timeStepMultiplier, grid.MaxVelocity * 1.1f);
+    float timeStep {
+        get {
+            float frameRate = Mathf.Max(60f * timeStepMultiplier, grid.MaxVelocity * 1.1f);
+            Application.targetFrameRate = Mathf.CeilToInt(frameRate);
+            return 1f / frameRate;
+        }
+    }
     float timeStepMultiplier = 1;
     int solverIterations = 1;
+
+    public bool CloseLeftEdge { get; set; }
+    public bool CloseBottomEdge { get; set; }
+    public bool CloseRightEdge { get; set; }
+    public bool CloseTopEdge { get; set; }
 
     /// <summary>
     /// Get the staggered Grid object
@@ -120,26 +131,32 @@ public class FluidSimulation {
         grid.TransferParcelsData(parcels);
 
         // Add buoyancy forces -> fluid has non-zero divergence
-        // grid.AddBuoyancyForce(timeStep);
+        grid.AddBuoyancyForce(timeStep);
 
         // Add forces -> fluid has non-zero divergence (replaced by buoyancy)
-        externalAccelerations[0] = Gravity;
-        grid.AddExternalBodyForce(externalAccelerations, timeStep);
+        // externalAccelerations[0] = Gravity;
+        // grid.AddExternalBodyForce(externalAccelerations, timeStep);
 
         // Remove divergence based on pressure difference -> fluid becomes divergence free again
         grid.SolvePressure(solverIterations, timeStep);
         grid.UpdateVelocities(timeStep);
 
         // Advect quantities -> fluid MUST BE divergence free
-        parcels.TransferGridData(grid);
+        parcels.TransferVelocities(grid);
+        parcels.UpdateAffineState(grid);
         parcels.Advect(grid, timeStep);
 
         // grid.AdvectVelocities(timeStep);
-        // grid.AdvectTemperature(timeStep);
+        grid.AdvectTemperature(timeStep);
         // grid.AdvectSmoke(timeStep);
     }
 
     void UpdateGridParameters() {
+        grid.closeLeftEdge = CloseLeftEdge;
+        grid.closeBottomEdge = CloseBottomEdge;
+        grid.closeRightEdge = CloseRightEdge;
+        grid.closeTopEdge = CloseTopEdge;
+
         grid.Density = fluidDensity;
         grid.AmbientTemperature = ambientTemperature;
         grid.SmokeBuoyancyMultiplier = smokeBuoyancyMultiplier;

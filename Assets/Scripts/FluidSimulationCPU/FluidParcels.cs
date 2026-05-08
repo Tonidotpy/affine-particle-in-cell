@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 
 namespace FluidSimulationCPU {
 /// <summary>
@@ -6,15 +7,15 @@ namespace FluidSimulationCPU {
 /// Each parcel may contain multiple particles having the same position and velocity
 /// </summary>
 public class FluidParcels {
-    public readonly int count;
+    public int count;
 
-    public readonly float[] mass;
-    public readonly Vector2[] position;
-    public readonly Vector2[] velocity;
+    public float[] mass;
+    public Vector2[] position;
+    public Vector2[] velocity;
 
     // Affine State vectors
-    public readonly Vector2[] cx;
-    public readonly Vector2[] cy;
+    public Vector2[] cx;
+    public Vector2[] cy;
 
     public FluidParcels(int count) {
         this.count = count;
@@ -30,21 +31,43 @@ public class FluidParcels {
         }
     }
 
-    /// <summary>
-    /// Transfer velocities from the MAC Grid to the Parcels and update the
-    /// Affine State vectors using the new Grid velocities
-    /// </summary>
-    /// <param name="grid">The MAC Grid to get the data from</param>
-    public void TransferGridData(FluidGridMac grid) {
-        TransferVelocities(grid);
-        UpdateAffineState(grid);
+    public void RemoveParcel(int index) {
+        if (index < 0 || index >= count) return;
+
+        int lastIndex = count - 1;
+        if (index < lastIndex) {
+            mass[index] = mass[lastIndex];
+            velocity[index] = velocity[lastIndex];
+            position[index] = position[lastIndex];
+            cx[index] = cx[lastIndex];
+            cy[index] = cy[lastIndex];
+        }
+        --count;
+    }
+
+    public void AddParcel(Vector2 initalPosition, Vector2 initialVelocity) {
+        int capacity = mass.Length;
+        if (count >= capacity) {
+            Array.Resize(ref mass, capacity * 2);
+            Array.Resize(ref position, capacity * 2);
+            Array.Resize(ref velocity, capacity * 2);
+            Array.Resize(ref cx, capacity * 2);
+            Array.Resize(ref cy, capacity * 2);
+        }
+
+        mass[count] = 1f;
+        velocity[count] = initialVelocity;
+        position[count] = initalPosition;
+        cx[count] = Vector2.zero;
+        cy[count] = Vector2.zero;
+        ++count;
     }
 
     /// <summary>
     /// Transfer velocities from the MAC Grid to the Parcels
     /// </summary>
     /// <param name="grid">The MAC Grid to get the data from</param>
-    void TransferVelocities(FluidGridMac grid) {
+    public void TransferVelocities(FluidGridMac grid) {
         for (int i = 0; i < count; ++i) {
             Vector2 v = Vector2.zero;
             Vector2 p = position[i];
@@ -101,7 +124,7 @@ public class FluidParcels {
     /// Update the Affine State vectors based on Grid velocities
     /// </summary>
     /// <param name="grid">The MAC Grid to get the data from</param>
-    void UpdateAffineState(FluidGridMac grid) {
+    public void UpdateAffineState(FluidGridMac grid) {
         for (int i = 0; i < count; ++i) {
             Vector2 p = position[i];
 
@@ -170,13 +193,58 @@ public class FluidParcels {
             Vector2 k3 = grid.SampleVelocity(p + k2 * (dt * 0.5f));
             Vector2 k4 = grid.SampleVelocity(p + k3 * dt);
 
-            // TODO: Consider Grid solid cells
             // RK4 implementation
-            Vector2 pNext = p + (dt / 6f) * (k1 + 2 * k2 + 2 * k3 + k4);
-            position[i] = new Vector2(
-                Mathf.Clamp(pNext.x, -0.5f, grid.width - 0.5f),
-                Mathf.Clamp(pNext.y, -0.5f, grid.height - 0.5f)
+            Vector2 dp = (dt / 6f) * (k1 + 2 * k2 + 2 * k3 + k4);
+
+            if (dp == Vector2.zero) continue;
+            // This adds dissipation but simplify collisions but it does not
+            // happen that frequently. The magnitude usually seats between 0 and 1
+            dp = Vector2.ClampMagnitude(dp, 1f);
+
+            Vector2 direction = dp.normalized;
+            Vector2 cellPosition = new Vector2(
+                Mathf.Round(p.x - Mathf.Sign(direction.x) * 1e-3f),
+                Mathf.Round(p.y - Mathf.Sign(direction.y) * 1e-3f)
             );
+            float horizontalEdgePosition = cellPosition.x + Mathf.Sign(direction.x) * 0.5f;
+            float verticalEdgePosition = cellPosition.y + Mathf.Sign(direction.y) * 0.5f;
+            float tx = Mathf.Abs(dp.x) > 1e-6f
+                ? (horizontalEdgePosition - p.x) / dp.x
+                : float.MaxValue;
+            float ty = Mathf.Abs(dp.y) > 1e-6f
+                ? (verticalEdgePosition - p.y) / dp.y :
+                float.MaxValue;
+
+            if (tx <= 1f || ty <= 1f) {
+                if (tx < ty) {
+                    Vector2Int cellNext = new Vector2Int(
+                        Mathf.RoundToInt(cellPosition.x + Mathf.Sign(direction.x)),
+                        Mathf.RoundToInt(cellPosition.y)
+                    );
+                    if (grid.GetCellType(cellNext.x, cellNext.y) == FluidGridMac.CellType.Solid) {
+                        // velocity[i].x *= -0.9f;    // Reverse horizontal velocity adding a little bit of dissipation
+                        velocity[i].x = 0;
+                        dp *= (tx * 0.995f);       // Move the Parcel near the edge
+                    }
+                }
+                else {
+                    Vector2Int cellNext = new Vector2Int(
+                        Mathf.RoundToInt(cellPosition.x),
+                        Mathf.RoundToInt(cellPosition.y + Mathf.Sign(direction.y))
+                    );
+                    if (grid.GetCellType(cellNext.x, cellNext.y) == FluidGridMac.CellType.Solid) {
+                        // velocity[i].y *= -0.9f;    // Reverse vertical velocity adding a little bit of dissipation
+                        velocity[i].y = 0;
+                        dp *= (ty * 0.995f);       // Move the Parcel near the edge
+                    }
+                }
+            }
+            position[i] += dp;
+            if (position[i].x <= -1f || position[i].x >= grid.width + 1f ||
+                position[i].y <= -1f || position[i].y >= grid.height + 1f) {
+                RemoveParcel(i);
+                --i; // Avoid skipping a particle
+            }
         }
     }
 }

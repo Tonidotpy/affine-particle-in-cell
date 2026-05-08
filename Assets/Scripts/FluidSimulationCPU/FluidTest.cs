@@ -14,6 +14,11 @@ public class FluidTest : MonoBehaviour {
     public int parcelsCount = 50;
     public float fluidDensity = 1.3f; // kg/m^2
 
+    public bool closeLeftEdge = false;
+    public bool closeBottomEdge = false;
+    public bool closeRightEdge = false;
+    public bool closeTopEdge = false;
+
     [Header("Simulation Settings")]
     public int solverIterations = 1;
     public float sor = 1.7f;
@@ -47,8 +52,9 @@ public class FluidTest : MonoBehaviour {
         S: Update fluid obstacles in the Grid
         Z: Clear all the obstacles
         MouseLeft: Add velocity
-        MouseRight: Add smoke
-        Shift+MouseRight: Remove smoke");
+        MouseRight: Add mass
+        Shift+MouseRight: Remove mass
+        Ctrl+MouseRight: Add Parcels");
     }
 
     void Start() {
@@ -64,6 +70,11 @@ public class FluidTest : MonoBehaviour {
     }
 
     void Update() {
+        simulation.CloseLeftEdge = closeLeftEdge;
+        simulation.CloseBottomEdge = closeBottomEdge;
+        simulation.CloseRightEdge = closeRightEdge;
+        simulation.CloseTopEdge = closeTopEdge;
+
         simulation.SOR = sor;
         simulation.TimeStepMultiplier = timeStepMultiplier;
         simulation.SolverIterations = solverIterations;
@@ -131,18 +142,27 @@ public class FluidTest : MonoBehaviour {
         }
         if (isMouseRightHeld) {
             FluidParcels parcels = simulation.Parcels;
-            for (int i = 0; i < parcels.count; ++i) {
-                Vector2 p = parcels.position[i];
-                Vector2 position = simulationRenderer.CellCenterToWorld(p.x, p.y);
-                float sqrDistance = (position - mousePosition).sqrMagnitude;
-                float sqrRadius = mouseInputRadius * mouseInputRadius;
 
-                if (sqrDistance <= sqrRadius) {
-                    float weight = 1f - Mathf.Clamp01(sqrDistance / sqrRadius);
-                    float massDelta = weight * smokeAmount;
-                    float mass = parcels.mass[i];
-                    mass += InputHelper.ShiftIsHeld ? -massDelta : massDelta;
-                    parcels.mass[i] = Mathf.Max(1f, mass);
+            if (InputHelper.CtrlIsHeld) {
+                Vector2 mouseDelta = mousePosition - mousePositionOld;
+                Vector2 pos = mousePosition + Random.insideUnitCircle * mouseInputRadius;
+                Vector2 vel = mouseDelta * velocityStrenght;
+                parcels.AddParcel(simulationRenderer.WorldToCellCenter(pos), vel);
+            }
+            else {
+                for (int i = 0; i < parcels.count; ++i) {
+                    Vector2 p = parcels.position[i];
+                    Vector2 position = simulationRenderer.CellCenterToWorld(p.x, p.y);
+                    float sqrDistance = (position - mousePosition).sqrMagnitude;
+                    float sqrRadius = mouseInputRadius * mouseInputRadius;
+
+                    if (sqrDistance <= sqrRadius) {
+                        float weight = 1f - Mathf.Clamp01(sqrDistance / sqrRadius);
+                        float massDelta = weight * smokeAmount;
+                        float mass = parcels.mass[i];
+                        mass += InputHelper.ShiftIsHeld ? -massDelta : massDelta;
+                        parcels.mass[i] = Mathf.Max(1f, mass);
+                    }
                 }
             }
         }
