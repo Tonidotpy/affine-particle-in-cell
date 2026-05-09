@@ -131,7 +131,7 @@ public class FluidSimulation {
         grid.TransferParcelsData(parcels);
 
         // Add buoyancy forces -> fluid has non-zero divergence
-        grid.AddBuoyancyForce(timeStep);
+        // grid.AddBuoyancyForce(timeStep);
 
         // Add forces -> fluid has non-zero divergence (replaced by buoyancy)
         // externalAccelerations[0] = Gravity;
@@ -146,7 +146,7 @@ public class FluidSimulation {
         parcels.UpdateAffineState(grid);
         parcels.Advect(grid, timeStep);
 
-        // grid.AdvectVelocities(timeStep);
+        grid.AdvectVelocities(timeStep);
         grid.AdvectTemperature(timeStep);
         // grid.AdvectSmoke(timeStep);
     }

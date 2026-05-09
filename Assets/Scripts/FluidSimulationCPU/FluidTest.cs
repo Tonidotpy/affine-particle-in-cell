@@ -147,7 +147,7 @@ public class FluidTest : MonoBehaviour {
                 Vector2 mouseDelta = mousePosition - mousePositionOld;
                 Vector2 pos = mousePosition + Random.insideUnitCircle * mouseInputRadius;
                 Vector2 vel = mouseDelta * velocityStrenght;
-                parcels.AddParcel(simulationRenderer.WorldToCellCenter(pos), vel);
+                parcels.AddParcel(simulation.Grid, simulationRenderer.WorldToCellCenter(pos), vel);
             }
             else {
                 for (int i = 0; i < parcels.count; ++i) {

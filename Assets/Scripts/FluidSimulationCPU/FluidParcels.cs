@@ -45,7 +45,15 @@ public class FluidParcels {
         --count;
     }
 
-    public void AddParcel(Vector2 initalPosition, Vector2 initialVelocity) {
+    public void AddParcel(FluidGridMac grid, Vector2 initalPosition, Vector2 initialVelocity) {
+        Vector2Int cellPosition = new Vector2Int(
+            Mathf.FloorToInt(initalPosition.x + 0.5f),
+            Mathf.FloorToInt(initalPosition.y + 0.5f)
+        );
+        if (grid.GetCellType(cellPosition.x, cellPosition.y) == FluidGridMac.CellType.Solid)
+            return;
+
+
         int capacity = mass.Length;
         if (count >= capacity) {
             Array.Resize(ref mass, capacity * 2);
@@ -201,45 +209,49 @@ public class FluidParcels {
             // happen that frequently. The magnitude usually seats between 0 and 1
             dp = Vector2.ClampMagnitude(dp, 1f);
 
-            Vector2 direction = dp.normalized;
-            Vector2 cellPosition = new Vector2(
-                Mathf.Round(p.x - Mathf.Sign(direction.x) * 1e-3f),
-                Mathf.Round(p.y - Mathf.Sign(direction.y) * 1e-3f)
-            );
-            float horizontalEdgePosition = cellPosition.x + Mathf.Sign(direction.x) * 0.5f;
-            float verticalEdgePosition = cellPosition.y + Mathf.Sign(direction.y) * 0.5f;
-            float tx = Mathf.Abs(dp.x) > 1e-6f
-                ? (horizontalEdgePosition - p.x) / dp.x
-                : float.MaxValue;
-            float ty = Mathf.Abs(dp.y) > 1e-6f
-                ? (verticalEdgePosition - p.y) / dp.y :
-                float.MaxValue;
+            Vector2 positionNext = p + dp;
 
-            if (tx <= 1f || ty <= 1f) {
-                if (tx < ty) {
-                    Vector2Int cellNext = new Vector2Int(
-                        Mathf.RoundToInt(cellPosition.x + Mathf.Sign(direction.x)),
-                        Mathf.RoundToInt(cellPosition.y)
-                    );
-                    if (grid.GetCellType(cellNext.x, cellNext.y) == FluidGridMac.CellType.Solid) {
-                        // velocity[i].x *= -0.9f;    // Reverse horizontal velocity adding a little bit of dissipation
+            Vector2Int cellPosition = new Vector2Int(
+                Mathf.FloorToInt(positionNext.x + 0.5f),
+                Mathf.FloorToInt(positionNext.y + 0.5f)
+            );
+            if (grid.GetCellType(cellPosition.x, cellPosition.y) == FluidGridMac.CellType.Solid) {
+                Vector2Int cellHorizontalNext = new Vector2Int(cellPosition.x, Mathf.FloorToInt(p.y + 0.5f));
+                Vector2Int cellVerticalNext = new Vector2Int(Mathf.FloorToInt(p.x + 0.5f), cellPosition.y);
+
+                bool isHorizontalSolid = grid.GetCellType(cellHorizontalNext.x, cellHorizontalNext.y) == FluidGridMac.CellType.Solid;
+                bool isVerticalSolid = grid.GetCellType(cellVerticalNext.x, cellVerticalNext.y) == FluidGridMac.CellType.Solid;
+
+                if (isHorizontalSolid) {
+                    velocity[i].x = 0;
+                    positionNext.x = p.x;
+                }
+                if (isVerticalSolid) {
+                    velocity[i].y = 0;
+                    positionNext.y = p.y;
+                }
+
+                if (!isHorizontalSolid && !isVerticalSolid) {
+                    if (Mathf.Abs(dp.x) < Mathf.Abs(dp.y)) {
                         velocity[i].x = 0;
-                        dp *= (tx * 0.995f);       // Move the Parcel near the edge
+                        positionNext.x = p.x;
+                    }
+                    else {
+                        velocity[i].y = 0;
+                        positionNext.y = p.y;
                     }
                 }
-                else {
-                    Vector2Int cellNext = new Vector2Int(
-                        Mathf.RoundToInt(cellPosition.x),
-                        Mathf.RoundToInt(cellPosition.y + Mathf.Sign(direction.y))
-                    );
-                    if (grid.GetCellType(cellNext.x, cellNext.y) == FluidGridMac.CellType.Solid) {
-                        // velocity[i].y *= -0.9f;    // Reverse vertical velocity adding a little bit of dissipation
-                        velocity[i].y = 0;
-                        dp *= (ty * 0.995f);       // Move the Parcel near the edge
-                    }
+
+                Vector2Int cellFinalPosition = new Vector2Int(
+                    Mathf.FloorToInt(positionNext.x + 0.5f),
+                    Mathf.FloorToInt(positionNext.y + 0.5f)
+                );
+                if (grid.GetCellType(cellFinalPosition.x, cellFinalPosition.y) == FluidGridMac.CellType.Solid) {
+                    positionNext = p;
+                    velocity[i] = Vector2.zero;
                 }
             }
-            position[i] += dp;
+            position[i] = positionNext;
             if (position[i].x <= -1f || position[i].x >= grid.width + 1f ||
                 position[i].y <= -1f || position[i].y >= grid.height + 1f) {
                 RemoveParcel(i);
