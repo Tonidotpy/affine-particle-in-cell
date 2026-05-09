@@ -96,6 +96,8 @@ public class FluidGridMac {
     public bool closeTopEdge = false;
 
     public readonly CellType[,] cellType;
+    public readonly float[,] momentumU;
+    public readonly float[,] momentumV;
     public readonly float[,] velocityU;
     public readonly float[,] velocityV;
     public readonly float[,] velocityUNext;
@@ -153,6 +155,8 @@ public class FluidGridMac {
         TemperatureBuoyancyMultiplier = 1f;
 
         cellType = new CellType[width, height];
+        momentumU = new float[width + 1, height];
+        momentumV = new float[width, height + 1];
         velocityU = new float[width + 1, height];
         velocityV = new float[width, height + 1];
         velocityUNext = new float[width + 1, height];
@@ -275,26 +279,26 @@ public class FluidGridMac {
     }
 
     /// <summary>
-    /// Get Cell velocity on a given axis staggered Grid provided its
+    /// Get Cell edge values on a given axis staggered Grid provided its
     /// coordinates in the main Grid
     /// The coordinates are mapped from the main Grid reference coordinate
     /// system to the staggered Grid coordinate system
     /// If any of the coordinates are out of the bounds of the Grid
     /// <code>0</code> is returned
     /// </summary>
-    /// <param name="velocity">Array of velocities</param>
+    /// <param name="edges">Array of edge values</param>
     /// <param name="x">Cell coordinate on the horizontal axis</param>
     /// <param name="y">Cell coordinate on the vertical axis</param>
     /// <param name="axis">Axis to consider</param>
-    /// <returns>Velocity of the staggered Grid Cell at coordinate x and y</returns>
-    public float GetVelocity(float[,] velocity, float x, float y, Axis axis) {
+    /// <returns>The value at the edge of the staggered Grid Cell at coordinate x and y</returns>
+    public float GetCellEdgeValue(float[,] edges, float x, float y, Axis axis) {
         float xOff = axis == Axis.X ? 0.5f : 0;
         float yOff = axis == Axis.Y ? 0.5f : 0;
         int i = Mathf.RoundToInt(x + xOff);
         int j = Mathf.RoundToInt(y + yOff);
         i = Mathf.Clamp(i, 0, axis == Axis.X ? width : width - 1);
         j = Mathf.Clamp(j, 0, axis == Axis.Y ? height : height - 1);
-        return velocity[i, j];
+        return edges[i, j];
     }
 
     /// <summary>
@@ -385,7 +389,7 @@ public class FluidGridMac {
                     (     dx) * (     dy)
                 };
                 for (int j = 0; j < 4; ++j) {
-                    float mass = GetVelocity(massEdgeU, x[j], y[j], Axis.X);
+                    float mass = GetCellEdgeValue(massEdgeU, x[j], y[j], Axis.X);
                     mass += m * weights[j];
                     SetVelocity(massEdgeU, x[j], y[j], Axis.X, mass);
                 }
@@ -408,7 +412,7 @@ public class FluidGridMac {
                     (     dx) * (     dy)
                 };
                 for (int j = 0; j < 4; ++j) {
-                    float mass = GetVelocity(massEdgeV, x[j], y[j], Axis.Y);
+                    float mass = GetCellEdgeValue(massEdgeV, x[j], y[j], Axis.Y);
                     mass += m * weights[j];
                     SetVelocity(massEdgeV, x[j], y[j], Axis.Y, mass);
                 }
@@ -417,7 +421,9 @@ public class FluidGridMac {
     }
 
     void TransferMomentum(FluidParcels parcels) {
-        ClearVelocities();
+        Array.Clear(momentumU, 0, momentumU.Length);
+        Array.Clear(momentumV, 0, momentumV.Length);
+
         for (int i = 0; i < parcels.count; ++i) {
             float m = parcels.mass[i];
             Vector2 v = parcels.velocity[i];
@@ -442,21 +448,21 @@ public class FluidGridMac {
                 float wTopLeft     = (     dpTopRight.x) * (1f - dpTopRight.y);
                 float wTopRight    = (1f - dpTopRight.x) * (1f - dpTopRight.y);
 
-                float vBottomLeft = GetVelocity(velocityU, xLeft, y, Axis.X);
+                float vBottomLeft = GetCellEdgeValue(momentumU, xLeft, y, Axis.X);
                 vBottomLeft += m * wBottomLeft * (v.x + Vector2.Dot(cx, dpBottomLeft));
-                SetVelocity(velocityU, xLeft, y, Axis.X, vBottomLeft);
+                SetVelocity(momentumU, xLeft, y, Axis.X, vBottomLeft);
 
-                float vBottomRight = GetVelocity(velocityU, xRight, y, Axis.X);
+                float vBottomRight = GetCellEdgeValue(momentumU, xRight, y, Axis.X);
                 vBottomRight += m * wBottomRight * (v.x + Vector2.Dot(cx, dpBottomRight));
-                SetVelocity(velocityU, xRight, y, Axis.X, vBottomRight);
+                SetVelocity(momentumU, xRight, y, Axis.X, vBottomRight);
 
-                float vTopLeft = GetVelocity(velocityU, xLeft, y + 1f, Axis.X);
+                float vTopLeft = GetCellEdgeValue(momentumU, xLeft, y + 1f, Axis.X);
                 vTopLeft += m * wTopLeft * (v.x + Vector2.Dot(cx, dpTopLeft));
-                SetVelocity(velocityU, xLeft, y + 1f, Axis.X, vTopLeft);
+                SetVelocity(momentumU, xLeft, y + 1f, Axis.X, vTopLeft);
 
-                float vTopRight = GetVelocity(velocityU, xRight, y + 1f, Axis.X);
+                float vTopRight = GetCellEdgeValue(momentumU, xRight, y + 1f, Axis.X);
                 vTopRight += m * wTopRight * (v.x + Vector2.Dot(cx, dpTopRight));
-                SetVelocity(velocityU, xRight, y + 1f, Axis.X, vTopRight);
+                SetVelocity(momentumU, xRight, y + 1f, Axis.X, vTopRight);
             }
 
             // Vertical axis
@@ -478,21 +484,21 @@ public class FluidGridMac {
                 float wTopLeft     = (     dpTopRight.x) * (1f - dpTopRight.y);
                 float wTopRight    = (1f - dpTopRight.x) * (1f - dpTopRight.y);
 
-                float vBottomLeft = GetVelocity(velocityV, x, yBottom, Axis.Y);
+                float vBottomLeft = GetCellEdgeValue(momentumV, x, yBottom, Axis.Y);
                 vBottomLeft += m * wBottomLeft * (v.y + Vector2.Dot(cy, dpBottomLeft));
-                SetVelocity(velocityV, x, yBottom, Axis.Y, vBottomLeft);
+                SetVelocity(momentumV, x, yBottom, Axis.Y, vBottomLeft);
 
-                float vBottomRight = GetVelocity(velocityV, x + 1f, yBottom, Axis.Y);
+                float vBottomRight = GetCellEdgeValue(momentumV, x + 1f, yBottom, Axis.Y);
                 vBottomRight += m * wBottomRight * (v.y + Vector2.Dot(cy, dpBottomRight));
-                SetVelocity(velocityV, x + 1, yBottom, Axis.Y, vBottomRight);
+                SetVelocity(momentumV, x + 1, yBottom, Axis.Y, vBottomRight);
 
-                float vTopLeft = GetVelocity(velocityV, x, yTop, Axis.Y);
+                float vTopLeft = GetCellEdgeValue(momentumV, x, yTop, Axis.Y);
                 vTopLeft += m * wTopLeft * (v.y + Vector2.Dot(cy, dpTopLeft));
-                SetVelocity(velocityV, x, yTop, Axis.Y, vTopLeft);
+                SetVelocity(momentumV, x, yTop, Axis.Y, vTopLeft);
 
-                float vTopRight = GetVelocity(velocityV, x + 1, yTop, Axis.Y);
+                float vTopRight = GetCellEdgeValue(momentumV, x + 1, yTop, Axis.Y);
                 vTopRight += m * wTopRight * (v.y + Vector2.Dot(cy, dpTopRight));
-                SetVelocity(velocityV, x + 1, yTop, Axis.Y, vTopRight);
+                SetVelocity(momentumV, x + 1, yTop, Axis.Y, vTopRight);
             }
         }
         TransferVelocities(parcels);
@@ -504,9 +510,9 @@ public class FluidGridMac {
                 float x = i - 0.5f;
                 float y = j;
 
-                float m = GetVelocity(massEdgeU, x, y, Axis.X);
+                float m = GetCellEdgeValue(massEdgeU, x, y, Axis.X);
                 if (m > 0) {
-                    float u = GetVelocity(velocityU, x, y, Axis.X) / m;
+                    float u = GetCellEdgeValue(momentumU, x, y, Axis.X) / m;
                     SetVelocity(velocityU, x, y, Axis.X, u);
                 }
             }
@@ -517,9 +523,9 @@ public class FluidGridMac {
                 float x = i;
                 float y = j - 0.5f;
 
-                float m = GetVelocity(massEdgeV, x, y, Axis.Y);
+                float m = GetCellEdgeValue(massEdgeV, x, y, Axis.Y);
                 if (m > 0) {
-                    float v = GetVelocity(velocityV, x, y, Axis.Y) / m;
+                    float v = GetCellEdgeValue(momentumV, x, y, Axis.Y) / m;
                     SetVelocity(velocityV, x, y, Axis.Y, v);
                 }
             }
@@ -555,10 +561,10 @@ public class FluidGridMac {
                 uint flowLeft = isSolid || GetCellType(i - 1, j) != CellType.Fluid ? 0U : 1U;
                 uint flowEdgeCount = flowTop + flowBottom + flowRight + flowLeft;
 
-                float velocityTop = GetVelocity(velocityV, i, j + 0.5f, Axis.Y);
-                float velocityBottom = GetVelocity(velocityV, i, j - 0.5f, Axis.Y);
-                float velocityRight = GetVelocity(velocityU, i + 0.5f, j, Axis.X);
-                float velocityLeft = GetVelocity(velocityU, i - 0.5f, j, Axis.X);
+                float velocityTop = GetCellEdgeValue(velocityV, i, j + 0.5f, Axis.Y);
+                float velocityBottom = GetCellEdgeValue(velocityV, i, j - 0.5f, Axis.Y);
+                float velocityRight = GetCellEdgeValue(velocityU, i + 0.5f, j, Axis.X);
+                float velocityLeft = GetCellEdgeValue(velocityU, i - 0.5f, j, Axis.X);
                 float velocityTerm = (velocityTop - velocityBottom + velocityRight - velocityLeft) / dt;
 
                 pressureSolverData[i, j] = new PressureSolverData() {
@@ -622,7 +628,7 @@ public class FluidGridMac {
 
                 float pressureCenter = GetPressure(i, j);
                 float pressureLeft = GetPressure(i - 1, j);
-                float u = GetVelocity(velocityU, x, y, Axis.X) - k * (pressureCenter - pressureLeft);
+                float u = GetCellEdgeValue(velocityU, x, y, Axis.X) - k * (pressureCenter - pressureLeft);
                 SetVelocity(velocityU, x, y, Axis.X, u);
             }
         }
@@ -641,7 +647,7 @@ public class FluidGridMac {
 
                 float pressureCenter = GetPressure(i, j);
                 float pressureBottom = GetPressure(i, j - 1);
-                float v = GetVelocity(velocityV, x, y, Axis.Y) - k * (pressureCenter - pressureBottom);
+                float v = GetCellEdgeValue(velocityV, x, y, Axis.Y) - k * (pressureCenter - pressureBottom);
                 SetVelocity(velocityV, x, y, Axis.Y, v);
             }
         }
@@ -663,7 +669,7 @@ public class FluidGridMac {
                     CellType rightType = GetCellType(i, j);
                     CellType leftType = GetCellType(i - 1, j);
                     if (leftType == CellType.Fluid || rightType == CellType.Fluid) {
-                        float u = GetVelocity(velocityU, x, y, Axis.X);
+                        float u = GetCellEdgeValue(velocityU, x, y, Axis.X);
                         u += a.x * dt;
                         SetVelocity(velocityU, x, y, Axis.X, u);
                     }
@@ -679,7 +685,7 @@ public class FluidGridMac {
                     CellType topType = GetCellType(i, j);
                     CellType bottomType = GetCellType(i, j - 1);
                     if (bottomType == CellType.Fluid || topType == CellType.Fluid) {
-                        float v = GetVelocity(velocityV, x, y, Axis.Y);
+                        float v = GetCellEdgeValue(velocityV, x, y, Axis.Y);
                         v += a.y * dt;
                         SetVelocity(velocityV, x, y, Axis.Y, v);
                     }
@@ -707,7 +713,7 @@ public class FluidGridMac {
                     float buoyancy = -SmokeBuoyancyMultiplier * smoke +
                                      TemperatureBuoyancyMultiplier * (temperature - AmbientTemperature);
 
-                    float v = GetVelocity(velocityV, x, y, Axis.Y);
+                    float v = GetCellEdgeValue(velocityV, x, y, Axis.Y);
                     v += buoyancy * dt;
                     SetVelocity(velocityV, x, y, Axis.Y, v);
                 }
@@ -741,7 +747,7 @@ public class FluidGridMac {
                 CellType rightType = GetCellType(i, j);
                 CellType leftType = GetCellType(i - 1, j);
                 if (leftType != CellType.Fluid || rightType != CellType.Fluid) {
-                    float u = GetVelocity(velocityU, x, y, Axis.X);
+                    float u = GetCellEdgeValue(velocityU, x, y, Axis.X);
                     SetVelocity(velocityUNext, x, y, Axis.X, u);
                 } else {
                     Vector2 position = new Vector2(x, y);
@@ -762,7 +768,7 @@ public class FluidGridMac {
                 CellType topType = GetCellType(i, j);
                 CellType bottomType = GetCellType(i, j - 1);
                 if (bottomType != CellType.Fluid || topType != CellType.Fluid) {
-                    float v = GetVelocity(velocityV, x, y, Axis.Y);
+                    float v = GetCellEdgeValue(velocityV, x, y, Axis.Y);
                     SetVelocity(velocityVNext, x, y, Axis.Y, v);
                 } else {
                     Vector2 position = new Vector2(x, y);
@@ -813,10 +819,10 @@ public class FluidGridMac {
         float top = bottom + 1f;
 
         // Get values on the four edges
-        float lt = GetVelocity(map, left, top, axis);
-        float rt = GetVelocity(map, right, top, axis);
-        float lb = GetVelocity(map, left, bottom, axis);
-        float rb = GetVelocity(map, right, bottom, axis);
+        float lt = GetCellEdgeValue(map, left, top, axis);
+        float rt = GetCellEdgeValue(map, right, top, axis);
+        float lb = GetCellEdgeValue(map, left, bottom, axis);
+        float rb = GetCellEdgeValue(map, right, bottom, axis);
 
         // Calculate how far [0,1] the input point is along the current cell
         float xFrac = Clamp01(x - left);
@@ -986,10 +992,10 @@ public class FluidGridMac {
     /// <param name="i">Cell coordinate on the horizontal axis</param>
     /// <param name="j">Cell coordinate on the vertical axis</param>
     public float CalculateDivergenceAtCell(int i, int j) {
-        float velocityRight = GetVelocity(velocityU, i + 0.5f, j, Axis.X);
-        float velocityLeft = GetVelocity(velocityU, i - 0.5f, j, Axis.X);
-        float velocityTop = GetVelocity(velocityV, i, j + 0.5f, Axis.Y);
-        float velocityBottom = GetVelocity(velocityV, i, j - 0.5f, Axis.Y);
+        float velocityRight = GetCellEdgeValue(velocityU, i + 0.5f, j, Axis.X);
+        float velocityLeft = GetCellEdgeValue(velocityU, i - 0.5f, j, Axis.X);
+        float velocityTop = GetCellEdgeValue(velocityV, i, j + 0.5f, Axis.Y);
+        float velocityBottom = GetCellEdgeValue(velocityV, i, j - 0.5f, Axis.Y);
 
         float gradientX = velocityRight - velocityLeft;
         float gradientY = velocityTop - velocityBottom;

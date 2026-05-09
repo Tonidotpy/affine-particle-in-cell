@@ -262,7 +262,7 @@ public class FluidRenderer : MonoBehaviour {
             for (int j = 0; j < grid.height; ++j) {
                 float x = i - 0.5f;
                 float y = j;
-                float u = grid.GetVelocity(grid.velocityU, x, y, FluidGridMac.Axis.X);
+                float u = grid.GetCellEdgeValue(grid.velocityU, x, y, FluidGridMac.Axis.X);
                 Vector2 pos = CellCenterToWorld(x, y);
                 RenderVelocityArrow(pos, new Vector2(u, 0), velocityUColor, velocityPointRadius,
                                     velocityArrowLengthFactor, velocityArrowThickness);
@@ -274,7 +274,7 @@ public class FluidRenderer : MonoBehaviour {
             for (int j = 0; j <= grid.height; ++j) {
                 float x = i;
                 float y = j - 0.5f;
-                float v = grid.GetVelocity(grid.velocityV, x, y, FluidGridMac.Axis.Y);
+                float v = grid.GetCellEdgeValue(grid.velocityV, x, y, FluidGridMac.Axis.Y);
                 Vector2 pos = CellCenterToWorld(x, y);
                 RenderVelocityArrow(pos, new Vector2(0, v), velocityVColor, velocityPointRadius,
                                     velocityArrowLengthFactor, velocityArrowThickness);

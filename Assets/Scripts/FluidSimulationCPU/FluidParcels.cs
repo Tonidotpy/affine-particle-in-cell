@@ -90,7 +90,7 @@ public class FluidParcels {
                     (     xFrac) * (     yFrac)
                 };
                 for (int j = 0; j < 4; ++j) {
-                    float velocity = grid.GetVelocity(grid.velocityU, x[j], y[j], FluidGridMac.Axis.X);
+                    float velocity = grid.GetCellEdgeValue(grid.velocityU, x[j], y[j], FluidGridMac.Axis.X);
                     v.x += weight[j] * velocity;
                 }
             }
@@ -112,7 +112,7 @@ public class FluidParcels {
                     (     xFrac) * (     yFrac)
                 };
                 for (int j = 0; j < 4; ++j) {
-                    float velocity = grid.GetVelocity(grid.velocityV, x[j], y[j], FluidGridMac.Axis.Y);
+                    float velocity = grid.GetCellEdgeValue(grid.velocityV, x[j], y[j], FluidGridMac.Axis.Y);
                     v.y += weight[j] * velocity;
                 }
             }
@@ -148,7 +148,7 @@ public class FluidParcels {
 
                 Vector2 c = Vector2.zero;
                 for (int j = 0; j < 4; ++j) {
-                    float velocity = grid.GetVelocity(grid.velocityU, x[j], y[j], FluidGridMac.Axis.X);
+                    float velocity = grid.GetCellEdgeValue(grid.velocityU, x[j], y[j], FluidGridMac.Axis.X);
                     c += weightGradient[j] * velocity;
                 }
                 cx[i] = c;
@@ -172,7 +172,7 @@ public class FluidParcels {
                 };
                 Vector2 c = Vector2.zero;
                 for (int j = 0; j < 4; ++j) {
-                    float velocity = grid.GetVelocity(grid.velocityV, x[j], y[j], FluidGridMac.Axis.Y);
+                    float velocity = grid.GetCellEdgeValue(grid.velocityV, x[j], y[j], FluidGridMac.Axis.Y);
                     c += weightGradient[j] * velocity;
                 }
                 cy[i] = c;
