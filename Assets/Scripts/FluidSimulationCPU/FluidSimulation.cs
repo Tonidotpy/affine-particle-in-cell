@@ -5,7 +5,9 @@ namespace FluidSimulationCPU {
 /// Eulerian fluid simulation based on a staggered Grid
 /// </summary>
 public class FluidSimulation {
+    FluidParcels parcels;
     FluidGridMac grid;
+
     float fluidDensity = 1.3f;       // kg/m^2
     float ambientTemperature = 300f; // K
     Vector2[] externalAccelerations; // m/s^2
@@ -15,15 +17,33 @@ public class FluidSimulation {
     /// <summary>
     /// Simulation time step in seconds
     /// </summary>
-    float timeStep => 1f / (60f * timeStepMultiplier);
+    float timeStep {
+        get {
+            float frameRate = Mathf.Max(60f * timeStepMultiplier, grid.MaxVelocity * 1.1f);
+            Application.targetFrameRate = Mathf.CeilToInt(frameRate);
+            return 1f / frameRate;
+        }
+    }
     float timeStepMultiplier = 1;
     int solverIterations = 1;
+
+    public bool CloseLeftEdge { get; set; }
+    public bool CloseBottomEdge { get; set; }
+    public bool CloseRightEdge { get; set; }
+    public bool CloseTopEdge { get; set; }
 
     /// <summary>
     /// Get the staggered Grid object
     /// </summary>
     public FluidGridMac Grid {
         get { return grid; }
+    }
+
+    /// <summary>
+    /// Get the fluid Parcels object
+    /// </summary>
+    public FluidParcels Parcels {
+        get { return parcels; }
     }
 
     /// <summary>
@@ -89,7 +109,8 @@ public class FluidSimulation {
     /// </summary>
     public Vector2 Gravity { get; set; }
 
-    public FluidSimulation(int gridWidth, int gridHeight) {
+    public FluidSimulation(int gridWidth, int gridHeight, int parcelsCount) {
+        parcels = new FluidParcels(parcelsCount);
         grid = new FluidGridMac(gridWidth, gridHeight);
 
         for (int i = 0; i < gridWidth; ++i) {
@@ -107,24 +128,37 @@ public class FluidSimulation {
     public void RunStep() {
         UpdateGridParameters();
 
-        // Advect quantities -> fluid MUST BE divergence free
-        grid.AdvectVelocities(timeStep);
-        grid.AdvectTemperature(timeStep);
-        grid.AdvectSmoke(timeStep);
+        grid.TransferParcelsData(parcels);
 
+        // DEPRECATED: Buoyancy forces due to temperature difference
         // Add buoyancy forces -> fluid has non-zero divergence
-        grid.AddBuoyancyForce(timeStep);
+        // grid.AddBuoyancyForce(timeStep);
 
         // Add forces -> fluid has non-zero divergence (replaced by buoyancy)
-        // externalAccelerations[0] = Gravity;
-        // grid.AddExternalBodyForce(externalAccelerations, timeStep);
+        externalAccelerations[0] = Gravity;
+        grid.AddExternalBodyForce(externalAccelerations, timeStep);
 
         // Remove divergence based on pressure difference -> fluid becomes divergence free again
         grid.SolvePressure(solverIterations, timeStep);
         grid.UpdateVelocities(timeStep);
+
+        // Advect quantities -> fluid MUST BE divergence free
+        parcels.TransferGridData(grid);
+        parcels.UpdateAffineState(grid);
+        parcels.Advect(grid, timeStep);
+
+        // DEPRECATED: Grid advection
+        // grid.AdvectVelocities(timeStep);
+        // grid.AdvectTemperature(timeStep);
+        // grid.AdvectSmoke(timeStep);
     }
 
     void UpdateGridParameters() {
+        grid.closeLeftEdge = CloseLeftEdge;
+        grid.closeBottomEdge = CloseBottomEdge;
+        grid.closeRightEdge = CloseRightEdge;
+        grid.closeTopEdge = CloseTopEdge;
+
         grid.Density = fluidDensity;
         grid.AmbientTemperature = ambientTemperature;
         grid.SmokeBuoyancyMultiplier = smokeBuoyancyMultiplier;

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using Seb.Helpers;
 
@@ -8,6 +9,11 @@ public class Test : MonoBehaviour {
     public ComputeShader compute;
     public Vector2Int resolution = new(50, 50);
     public float fluidDensity = 1.3f; // kg/m^2
+
+    public bool closeLeftEdge = false;
+    public bool closeBottomEdge = false;
+    public bool closeRightEdge = false;
+    public bool closeTopEdge = false;
 
     [Header("Simulation Settings")]
     public int solverIterations = 15;
@@ -51,6 +57,7 @@ public class Test : MonoBehaviour {
 
     void Update() {
         UpdateSimulationSettings();
+        simulation.SetupStep();
 
         if (!isSimulationPaused || shouldRunSimulationStepOnce) {
             shouldRunSimulationStepOnce = false;
@@ -64,6 +71,11 @@ public class Test : MonoBehaviour {
     }
 
     void UpdateSimulationSettings() {
+        simulation.CloseLeftEdge = closeLeftEdge;
+        simulation.CloseBottomEdge = closeBottomEdge;
+        simulation.CloseRightEdge = closeRightEdge;
+        simulation.CloseTopEdge = closeTopEdge;
+
         simulation.SOR = sor;
         simulation.TimeStepMultiplier = timeStepMultiplier;
         simulation.SolverIterations = solverIterations;
@@ -76,6 +88,11 @@ public class Test : MonoBehaviour {
         simulation.TemperatureDiffusionMultiplier = temperatureDiffusionMultiplier;
         simulation.TemperatureDecayMultiplier = temperatureDecayMultiplier;
         simulation.TemperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
+
+        FluidObstacle[] obstacles = GameObject.FindObjectsByType<FluidObstacle>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Array.ForEach(obstacles, obstacle => obstacle.Origin = simulationRenderer.HalfWorldSize);
+        simulation.Obstacles = obstacles;
     }
 
     void HandleInput() {
@@ -115,6 +132,7 @@ public class Test : MonoBehaviour {
         mousePositionOld = mousePosition;
 
         simulation.HandleInput();
+        simulation.HandleObstacles();
         simulationRenderer.RenderInput(mousePositionOld, isMouseLeftHeld);
     }
 }

@@ -573,6 +573,13 @@ MonoBehaviour:
   CellSize: 1
   cellBorderThickness: 0
   gridColor: {r: 0.21568628, g: 0.21568628, b: 0.21568628, a: 0.39215687}
+  showParcels: 0
+  showParcelsVelocity: 0
+  parcelsColor: {r: 0, g: 0, b: 1, a: 0.33333334}
+  parcelsVelocityColor: {r: 0, g: 0, b: 1, a: 1}
+  parcelsVelocityPointRadius: 0.07
+  parcelsVelocityArrowLengthFactor: 0.17
+  parcelsVelocityArrowThickness: 0.04
   velocityUColor: {r: 1, g: 0, b: 0, a: 1}
   velocityVColor: {r: 0, g: 1, b: 0, a: 1}
   velocityPointRadius: 0.07
@@ -637,8 +644,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationRefactor.FluidRenderer
   width: 50
-  height: 35
+  height: 28
+  parcelsCount: 300
   fluidDensity: 1.3
+  closeLeftEdge: 1
+  closeBottomEdge: 1
+  closeRightEdge: 1
+  closeTopEdge: 1
   solverIterations: 15
   sor: 1.7
   timeStepMultiplier: 1

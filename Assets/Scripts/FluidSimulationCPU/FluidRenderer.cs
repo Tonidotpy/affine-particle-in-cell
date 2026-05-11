@@ -24,6 +24,7 @@ public class FluidRenderer : MonoBehaviour {
         Smoke,
     }
 
+    FluidParcels parcels;
     FluidGridMac grid;
     bool isRenderingEnabled;
 
@@ -41,6 +42,15 @@ public class FluidRenderer : MonoBehaviour {
     [Range(0, 0.2f)]
     public float cellBorderThickness = 0.05f;
     public Color gridColor = new Color(0.2156862745f, 0.2156862745f, 0.2156862745f);
+
+    [Header("Parcels settings")]
+    public bool showParcels = false;
+    public bool showParcelsVelocity = false;
+    public Color parcelsColor = new Color(0f, 0f, 1f);
+    public Color parcelsVelocityColor = new Color(0f, 0f, 1f);
+    public float parcelsVelocityPointRadius = 0.07f;
+    public float parcelsVelocityArrowLengthFactor = 0.3f;
+    public float parcelsVelocityArrowThickness = 0.04f;
 
     [Header("Velocity")]
     public Color velocityUColor = new Color(1f, 0f, 0f);
@@ -123,6 +133,14 @@ public class FluidRenderer : MonoBehaviour {
     }
 
     /// <summary>
+    /// Set the fluid Parcels to render
+    /// </summary>
+    /// <param name="parcels">The Parcels to render</param>
+    public void SetParcelsToRender(FluidParcels parcels) {
+        this.parcels = parcels;
+    }
+
+    /// <summary>
     /// Render everything based on the visualization mode
     /// </summary>
     /// <param name="mousePosition">Coordinates of the mouse</param>
@@ -134,6 +152,8 @@ public class FluidRenderer : MonoBehaviour {
         Draw.StartLayerIfNotInMatching(Vector2.zero, 1, false);
 
         RenderGrid();
+        if (showParcels)
+            RenderParcels();
         if (visualizationMode == VisualizationMode.Velocity)
             RenderVelocities();
 
@@ -151,6 +171,22 @@ public class FluidRenderer : MonoBehaviour {
         for (int i = 0; i < grid.width; ++i) {
             for (int j = 0; j < grid.height; ++j) {
                 RenderCell(i, j);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Render the fluid Parcels
+    /// </summary>
+    void RenderParcels() {
+        for (int i = 0; i < parcels.count; ++i) {
+            Vector2 pos = parcels.position[i];
+            Vector2 vel = parcels.velocity[i];
+            Vector2 coords = CellCenterToWorld(pos.x, pos.y);
+            Draw.Point(coords, Mathf.Sqrt(grid.width * grid.height) * 0.01f, parcelsColor);
+            if (showParcelsVelocity) {
+                RenderVelocityArrow(CellCenterToWorld(pos.x, pos.y), vel, parcelsVelocityColor, parcelsVelocityPointRadius,
+                            parcelsVelocityArrowLengthFactor, parcelsVelocityArrowThickness);
             }
         }
     }
@@ -206,7 +242,7 @@ public class FluidRenderer : MonoBehaviour {
         case VisualizationMode.Smoke:
             if (grid.cellType[i, j] == FluidGridMac.CellType.Solid)
                 break;
-            float smoke = grid.smokeMap[i, j];
+            float smoke = grid.mass[i, j];
             float smokeT = Mathf.Clamp01(smoke / smokeDisplayRange);
             col = Color.Lerp(col, smokeColor, smokeT);
             if (showSmokeValue)
@@ -226,7 +262,7 @@ public class FluidRenderer : MonoBehaviour {
             for (int j = 0; j < grid.height; ++j) {
                 float x = i - 0.5f;
                 float y = j;
-                float u = grid.GetVelocity(grid.velocityU, x, y, FluidGridMac.Axis.X);
+                float u = grid.GetCellEdgeValue(grid.velocityU, x, y, FluidGridMac.Axis.X);
                 Vector2 pos = CellCenterToWorld(x, y);
                 RenderVelocityArrow(pos, new Vector2(u, 0), velocityUColor, velocityPointRadius,
                                     velocityArrowLengthFactor, velocityArrowThickness);
@@ -238,7 +274,7 @@ public class FluidRenderer : MonoBehaviour {
             for (int j = 0; j <= grid.height; ++j) {
                 float x = i;
                 float y = j - 0.5f;
-                float v = grid.GetVelocity(grid.velocityV, x, y, FluidGridMac.Axis.Y);
+                float v = grid.GetCellEdgeValue(grid.velocityV, x, y, FluidGridMac.Axis.Y);
                 Vector2 pos = CellCenterToWorld(x, y);
                 RenderVelocityArrow(pos, new Vector2(0, v), velocityVColor, velocityPointRadius,
                                     velocityArrowLengthFactor, velocityArrowThickness);

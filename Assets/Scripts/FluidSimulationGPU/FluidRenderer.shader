@@ -2,6 +2,7 @@ Shader "Unlit/FluidRenderer" {
     Properties {
     }
     SubShader {
+        Blend SrcAlpha OneMinusSrcAlpha
         Tags{ "RenderType" = "Opaque" } LOD 100
 
             Pass {
@@ -10,6 +11,10 @@ Shader "Unlit/FluidRenderer" {
 #pragma fragment frag
 
 #include "UnityCG.cginc"
+
+// Cell types
+#define CELL_TYPE_SOLID (0)
+#define CELL_TYPE_FLUID (1)
 
 // Velocity channels
 #define VELOCITY_CHANNEL_X (0)
@@ -37,6 +42,10 @@ Shader "Unlit/FluidRenderer" {
             int2 resolution;
             int visualizationMode;
             sampler2D debugMap;
+
+            // Obstacles
+            sampler2D cellType;
+            fixed4 obstacleColor;
 
             // Velocity
             sampler2D velocityMap;
@@ -70,6 +79,12 @@ Shader "Unlit/FluidRenderer" {
                 return o;
             }
 
+            float RandomNumber(float2 p) {
+                p = frac(p * float2(234.34, 435.345));
+                p += dot(p, p + 34.23);
+                return frac(p.x * p.y);
+            }
+
             fixed4 RenderDebug(v2f i) {
                 float4 val = tex2D(debugMap, i.uv);
                 fixed4 col = fixed4(val.xyz, 1);
@@ -80,9 +95,9 @@ Shader "Unlit/FluidRenderer" {
                 float2 velocity = tex2D(velocityMap, i.uv).rg;
                 fixed4 col = fixed4(0, 0, 0, 1);
                 if (velocityChannel == VELOCITY_CHANNEL_X || velocityChannel == VELOCITY_CHANNEL_BOTH)
-                    col.r = abs(velocity.x * velocity.x * velocityDisplayRange);
+                    col.r = velocity.x * velocityDisplayRange;
                 if (velocityChannel == VELOCITY_CHANNEL_Y || velocityChannel == VELOCITY_CHANNEL_BOTH)
-                    col.g = abs(velocity.y * velocity.y * velocityDisplayRange);
+                    col.g = velocity.y * velocityDisplayRange;
                 return col;
             }
 
@@ -116,6 +131,27 @@ Shader "Unlit/FluidRenderer" {
                 return fixed4(smoke * abs(smoke * smokeDisplayRange), 1);
             }
 
+            fixed4 RenderObstacle(v2f i, fixed4 col) {
+                uint3 type = tex2D(cellType, i.uv).xyz;
+                if (type.x == CELL_TYPE_SOLID) {
+                    // Check if it is an obstacle from its index
+                    if (type.y < 0) { col = obstacleColor; }
+                    else {
+                        // Check if it is an obstacle edge
+                        if (type.z > 0) { col = obstacleColor; }
+                        else {
+                            col = fixed4(
+                                RandomNumber(float2(type.y, -1)),
+                                RandomNumber(float2(type.y, 0)),
+                                RandomNumber(float2(type.y, 1)),
+                                0.3
+                            );
+                        }
+                    }
+                }
+                return col;
+            }
+
             fixed4 frag(v2f i) : SV_Target {
                 fixed4 col = fixed4(1, 0, 1, 1);
 
@@ -131,6 +167,9 @@ Shader "Unlit/FluidRenderer" {
                     col = RenderTemperature(i);
                 else if (visualizationMode == VISUALIZATION_MODE_SMOKE)
                     col = RenderSmoke(i);
+
+                if (visualizationMode != VISUALIZATION_MODE_TEMPERATURE)
+                    col = RenderObstacle(i, col);
                 return col;
             }
             ENDCG

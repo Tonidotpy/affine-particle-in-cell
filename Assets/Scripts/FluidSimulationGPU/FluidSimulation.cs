@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace FluidSimulationGPU {
@@ -8,6 +9,7 @@ public class FluidSimulation {
     FluidGridManager gridManager;
     Vector2 gravity = new Vector2(0, -9.81f); // m/s^2
     float fluidDensity = 1.3f;                // kg/m^2
+
     float ambientTemperature = 300f;          // K
     float smokeDiffusionMultiplier = 0.3f;
     float smokeDecayMultiplier = 1f;
@@ -22,6 +24,13 @@ public class FluidSimulation {
     float timeStep => 1f / (60f * timeStepMultiplier);
     float timeStepMultiplier = 1;
     int solverIterations = 15;
+
+    public bool CloseLeftEdge { get; set; }
+    public bool CloseBottomEdge { get; set; }
+    public bool CloseRightEdge { get; set; }
+    public bool CloseTopEdge { get; set; }
+
+    public FluidObstacle[] Obstacles { get; set; }
 
     /// <summary>
     /// Get the staggered Grid manager
@@ -133,23 +142,38 @@ public class FluidSimulation {
     }
 
     /// <summary>
+    /// Setup the simulation before actually running the step
+    /// </summary>
+    public void SetupStep() {
+        UpdateGridSettings();
+        gridManager.Setup();
+    }
+
+    /// <summary>
     /// Run a single step of the fluid simulation
     /// </summary>
     public void RunStep() {
-        UpdateGridSettings();
-        gridManager.Setup();
+        // Since the fluid may be divergent it is needed to remove the divergence
+        // based on pressure differences
+        gridManager.SolvePressure(solverIterations, timeStep);
+        gridManager.UpdateVelocities(timeStep);
 
+        // For advection the fluid is required to be divergence free
+        // so this step is done immediately after the pressure correction
         gridManager.AdvectSmoke(timeStep);
         gridManager.AdvectVelocities(timeStep);
 
+        // Any other step may increase the divergence of the fluid
+        gridManager.AddSmokeFromSources(timeStep);
         gridManager.AddBuoyancyForce(timeStep);
-
-        gridManager.SolvePressure(solverIterations, timeStep);
-        gridManager.UpdateVelocities(timeStep);
     }
 
     public void HandleInput() {
         gridManager.HandleInput();
+    }
+
+    public void HandleObstacles() {
+        gridManager.UpdateObstacles();
     }
 
     public void Clean() {
@@ -157,6 +181,11 @@ public class FluidSimulation {
     }
 
     void UpdateGridSettings() {
+        gridManager.closeLeftEdge = CloseLeftEdge;
+        gridManager.closeBottomEdge = CloseBottomEdge;
+        gridManager.closeRightEdge = CloseRightEdge;
+        gridManager.closeTopEdge = CloseTopEdge;
+
         gridManager.gravity = gravity;
         gridManager.density = fluidDensity;
         gridManager.ambientTemperature = ambientTemperature;
@@ -166,6 +195,7 @@ public class FluidSimulation {
         gridManager.temperatureDiffusionMultiplier = temperatureDiffusionMultiplier;
         gridManager.temperatureDecayMultiplier = temperatureDecayMultiplier;
         gridManager.temperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
+        gridManager.obstacles = Obstacles;
     }
 }
 }

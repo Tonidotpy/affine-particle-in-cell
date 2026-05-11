@@ -39,6 +39,9 @@ public class FluidRendererManager : MonoBehaviour {
     public Color inputColor = new Color(1f, 1f, 1f, 0.3f);
     public Color inputActiveColor = new Color(0f, 1f, 0.1f, 0.3f);
 
+    [Header("Obstacles")]
+    public Color obstacleColor = new Color(1f, 1f, 1f, 1f);
+
     [Header("Grid settings")]
     [Min(0.1f)]
     public float cellSize = 1f;
@@ -67,6 +70,7 @@ public class FluidRendererManager : MonoBehaviour {
     public Color smokeColor = new Color(1f, 1f, 1f, 1f);
 
     public Vector2 WorldSize => (Vector2)grid.resolution * cellSize;
+    public Vector2 HalfWorldSize => WorldSize * 0.5f;
 
     void SetupShader() {
         // Fallback to diffuse shader if null
@@ -92,6 +96,10 @@ public class FluidRendererManager : MonoBehaviour {
         material.SetVector("resolution", (Vector2)grid.resolution);
         material.SetInteger("visualizationMode", (int)visualizationMode);
         material.SetTexture("debugMap", grid.debugMap);
+
+        // Obstacles
+        material.SetTexture("cellType", grid.cellType);
+        material.SetVector("obstacleColor", obstacleColor);
 
         // Velocity
         material.SetTexture("velocityMap", grid.velocityMap);
