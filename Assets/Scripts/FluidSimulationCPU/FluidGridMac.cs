@@ -2,6 +2,7 @@ using UnityEngine;
 using static UnityEngine.Mathf;
 using System;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace FluidSimulationCPU {
 /// <summary>
@@ -111,6 +112,9 @@ public class FluidGridMac {
     public readonly float[,] massNext;
     public readonly float[,] massEdgeU;
     public readonly float[,] massEdgeV;
+
+    // DEPRECATED: Parcels lookup table
+    // public Dictionary<Vector2Int, List<int>> parcelsLookupTable;
 
     /// <summary>
     /// Successive Over-Relaxation multiplier used for Gauss-Seidel
@@ -333,6 +337,34 @@ public class FluidGridMac {
     public void TransferParcelsData(FluidParcels parcels) {
         TransferMass(parcels);
         TransferMomentum(parcels);
+        // TransferTemperature(parcels);
+        EnforceSolidBuondaryConditions();
+    }
+
+    void EnforceSolidBuondaryConditions() {
+        for (int j = 0; j < velocityU.GetLength(1); ++j) {
+            for (int i = 0; i < velocityU.GetLength(0); ++i) {
+                float x = i - 0.5f;
+                float y = j;
+
+                if (GetCellType(i, j) == CellType.Solid ||
+                    GetCellType(i - 1, j) == CellType.Solid) {
+                    SetVelocity(velocityU, x, y, Axis.X, 0);
+                }
+            }
+        }
+
+        for (int i = 0; i < velocityV.GetLength(0); ++i) {
+            for (int j = 0; j < velocityV.GetLength(1); ++j) {
+                float x = i;
+                float y = j - 0.5f;
+
+                if (GetCellType(i, j) == CellType.Solid ||
+                    GetCellType(i, j - 1) == CellType.Solid) {
+                    SetVelocity(velocityV, x, y, Axis.Y, 0);
+                }
+            }
+        }
     }
 
     void TransferMass(FluidParcels parcels) {
@@ -532,6 +564,23 @@ public class FluidGridMac {
         }
     }
 
+    // DEPRECATED: Temperature truansfer
+    // void TransferTemperature(FluidParcels parcels) {
+    //     ClearTemperature();
+    //     UpdateParcelsLookupTable(parcels);
+    //     foreach (var item in parcelsLookupTable) {
+    //         Vector2Int cellPosition = item.Key;
+    //         List<int> indices = item.Value;
+    //
+    //         float t = 0;
+    //         foreach (int index in indices) {
+    //             t += parcels.temperature[index];
+    //         }
+    //         t /= indices.Count;
+    //         SetCellCenterValue(temperature, cellPosition.x, cellPosition.y, t);
+    //     }
+    // }
+
     /// <summary>
     /// Calculate pressure values needed to remove divergence of fluid
     /// using the Gauss-Seidel method with SOR
@@ -720,6 +769,28 @@ public class FluidGridMac {
             }
         }
     }
+
+    /// <summary>
+    /// Update the Parcels lookup table used to optimize access of Parcels at
+    /// a specific position inside the Grid
+    /// </summary>
+    /// <param name="parcels">The parcels used to udpate the table</param>
+    // DEPRECATED: Parcels lookup table
+    // public void UpdateParcelsLookupTable(FluidParcels parcels) {
+    //     parcelsLookupTable = new Dictionary<Vector2Int, List<int>>();
+    //     for (int i = 0; i < parcels.count; ++i) {
+    //         Vector2 position = parcels.position[i];
+    //         Vector2Int cellPosition = new Vector2Int(
+    //             Mathf.FloorToInt(position.x + 0.5f),
+    //             Mathf.FloorToInt(position.y + 0.5f)
+    //         );
+    //
+    //         if (!parcelsLookupTable.ContainsKey(cellPosition)) {
+    //             parcelsLookupTable.Add(cellPosition, new List<int>());
+    //         }
+    //         parcelsLookupTable[cellPosition].Add(i);
+    //     }
+    // }
 
     /// <summary>
     /// Advect velocities using the Semi-Lagrangian method

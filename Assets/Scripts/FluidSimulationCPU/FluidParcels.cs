@@ -1,5 +1,6 @@
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 
 namespace FluidSimulationCPU {
 /// <summary>
@@ -12,6 +13,7 @@ public class FluidParcels {
     public float[] mass;
     public Vector2[] position;
     public Vector2[] velocity;
+    public float[] temperature;
 
     // Affine State vectors
     public Vector2[] cx;
@@ -22,13 +24,9 @@ public class FluidParcels {
         mass = new float[count];
         position = new Vector2[count];
         velocity = new Vector2[count];
+        temperature = new float[count];
         cx = new Vector2[count];
         cy = new Vector2[count];
-
-        for (int i = 0; i < count; ++i) {
-            mass[i] = 1f;
-            position[i] = new Vector2(Mathf.Cos(i), Mathf.Sin(i)) + Vector2.one * 5f;
-        }
     }
 
     public void RemoveParcel(int index) {
@@ -39,6 +37,7 @@ public class FluidParcels {
             mass[index] = mass[lastIndex];
             velocity[index] = velocity[lastIndex];
             position[index] = position[lastIndex];
+            temperature[index] = temperature[lastIndex];
             cx[index] = cx[lastIndex];
             cy[index] = cy[lastIndex];
         }
@@ -59,6 +58,7 @@ public class FluidParcels {
             Array.Resize(ref mass, capacity * 2);
             Array.Resize(ref position, capacity * 2);
             Array.Resize(ref velocity, capacity * 2);
+            Array.Resize(ref temperature, capacity * 2);
             Array.Resize(ref cx, capacity * 2);
             Array.Resize(ref cy, capacity * 2);
         }
@@ -66,16 +66,27 @@ public class FluidParcels {
         mass[count] = 1f;
         velocity[count] = initialVelocity;
         position[count] = initalPosition;
+        temperature[count] = grid.AmbientTemperature;
         cx[count] = Vector2.zero;
         cy[count] = Vector2.zero;
         ++count;
     }
 
     /// <summary>
+    /// Transfer data from the MAC Grid to the Parcels
+    /// </summary>
+    /// <param name="grid">The MAC Grid to get the data from</param>
+    public void TransferGridData(FluidGridMac grid) {
+        TransferVelocities(grid);
+        // DEPRECATED: Temperature transfer
+        // TransferTemperature(grid);
+    }
+
+    /// <summary>
     /// Transfer velocities from the MAC Grid to the Parcels
     /// </summary>
     /// <param name="grid">The MAC Grid to get the data from</param>
-    public void TransferVelocities(FluidGridMac grid) {
+    void TransferVelocities(FluidGridMac grid) {
         for (int i = 0; i < count; ++i) {
             Vector2 v = Vector2.zero;
             Vector2 p = position[i];
@@ -125,6 +136,22 @@ public class FluidParcels {
                 }
             }
             velocity[i] = v;
+        }
+    }
+
+    /// <summary>
+    /// Transfer temperature values from the MAC Grid to the Parcels
+    /// </summary>
+    /// <param name="grid">The MAC Grid to get the data from</param>
+    void TransferTemperature(FluidGridMac grid) {
+        for (int i = 0; i < count; ++i) {
+            Vector2 p = position[i];
+            Vector2Int cellPosition = new Vector2Int(
+                Mathf.FloorToInt(p.x + 0.5f),
+                Mathf.FloorToInt(p.y + 0.5f)
+            );
+
+            temperature[i] = grid.GetTemperature(cellPosition.x, cellPosition.y);
         }
     }
 
