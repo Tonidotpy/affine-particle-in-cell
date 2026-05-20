@@ -1,4 +1,11 @@
 #pragma kernel Init
+#pragma kernel ClearSmoke
+#pragma kernel UpdateParcelsPositionLookupHash
+#pragma kernel LookupBitonicSortStep
+#pragma kernel UpdateParcelsPositionLookupStart
+#pragma kernel TransferCellCenterMass
+#pragma kernel TransferCellEdgeMass
+#pragma kernel TransferMomentum
 #pragma kernel AdvectVelocities
 #pragma kernel VelocityAdvectionReadback
 #pragma kernel AdvectSmoke
@@ -15,6 +22,8 @@
 #pragma kernel ClearObstacles
 
 // --- Constants --- //
+static const uint UINT_MAX = 0xFFFFFFFF;
+
 static const uint FLOW_TOP_BIT_POS = 31;
 static const uint FLOW_BOTTOM_BIT_POS = 30;
 static const uint FLOW_RIGHT_BIT_POS = 29;
@@ -49,6 +58,20 @@ struct ObstacleData {
     float smokeRateMultiplier;
     float3 smokeRate;
     float temperature;
+};
+
+struct ParcelsData {
+    float mass;
+    float2 position;
+    float2 velocity;
+    float2 cx;
+    float2 cy;
+};
+
+struct ParcelsPositionLookup {
+    uint hash;  // Cell hash
+    uint index; // Parcel index
+    int start;  // First parcel with a specific hash
 };
 
 // --- Settings --- //
@@ -91,9 +114,9 @@ RWTexture2D<float2> velocityMap;
 RWTexture2D<float2> velocityMapAdvected;
 RWTexture2D<float> pressureMap;
 RWStructuredBuffer<PressureSolverData> pressureSolverData;
-RWTexture2D<float> temperatureMap;
 RWTexture2D<float4> smokeMap;
 RWTexture2D<float4> smokeMapAdvected;
+RWTexture2D<float2> edgeMassMap;
 
 // --- Samplers --- //
 Texture2D<float2> velocityMapSample;
@@ -108,6 +131,12 @@ StructuredBuffer<ObstacleData> obstacleData;
 StructuredBuffer<ObstacleIndex> obstacleIndices;
 StructuredBuffer<float2> obstacleVertices;
 StructuredBuffer<int> obstacleTriangles;
+
+// --- Parcels --- //
+const uint count;
+const uint powerOfTwoCount;
+StructuredBuffer<ParcelsData> parcelsData;
+RWStructuredBuffer<ParcelsPositionLookup> parcelsPositionLookup;
 
 // --- Utilities --- //
 uint2 ClampCoordinates(int i, int j) {
@@ -136,6 +165,18 @@ float GetPressure(int i, int j) {
     // By linear interpolation the pressure values outside the boundaries is
     // given by the opposite of the pressure value at the edge.
     return GetCellCenterValue(pressureMap, i, j, 0);
+}
+
+uint GetCellHash(uint2 position) {
+    uint hash = 0;
+    for (uint bitX = 0, bitY = 0, bit = 0; bit < 32; ++bitX, ++bitY, bit += 2) {
+        uint x = (position.x & (1 << bitX)) != 0;
+        uint y = (position.y & (1 << bitY)) != 0;
+
+        hash |= x << bit;
+        hash |= y << (bit + 1);
+    }
+    return hash;
 }
 
 uint2 GetCheckerboardCellCoordinates(uint index, uint passIndex, uint2 resolution) {
@@ -209,7 +250,164 @@ void Init(uint3 id : SV_DispatchThreadID) {
     velocityMap[id.xy] = 0;
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
+    edgeMassMap[id.xy] = 0;
     debugMap[id.xy] = 0;
+}
+
+[numthreads(8,8,1)]
+void ClearSmoke(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
+    edgeMassMap[id.xy] = 0;
+}
+
+[numthreads(64,1,1)]
+void UpdateParcelsPositionLookupHash(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= powerOfTwoCount) return;
+
+    ParcelsPositionLookup lookup = { UINT_MAX, UINT_MAX, -1 };
+    if (id.x < count) {
+        float2 p = parcelsData[id.x].position;
+        int2 cellPosition = floor(p.xy);
+        uint hash = GetCellHash(cellPosition);
+        lookup.hash = hash;
+        lookup.index = id.x;
+    }
+    parcelsPositionLookup[id.x] = lookup;
+}
+
+
+uint bitonicMajorStepIndex;
+uint bitonicMinorStepIndex;
+
+[numthreads(64,1,1)]
+void LookupBitonicSortStep(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= powerOfTwoCount) return;
+    uint i = id.x;
+    uint l = i ^ bitonicMinorStepIndex;
+
+    /* The threads with the lowest ids sort the array. */
+    if (l > i) {
+        uint hashI = parcelsPositionLookup[i].hash;
+        uint hashL = parcelsPositionLookup[l].hash;
+
+        uint indexI = parcelsPositionLookup[i].index;
+        uint indexL = parcelsPositionLookup[l].index;
+
+        if ((i & bitonicMajorStepIndex) == 0 && hashI > hashL) {
+            /* Sort ascending */
+            parcelsPositionLookup[i].hash = hashL;
+            parcelsPositionLookup[l].hash = hashI;
+
+            parcelsPositionLookup[i].index = indexL;
+            parcelsPositionLookup[l].index = indexI;
+        }
+        else if ((i & bitonicMajorStepIndex) != 0 && hashI < hashL) {
+            /* Sort descending */
+            parcelsPositionLookup[i].hash = hashL;
+            parcelsPositionLookup[l].hash = hashI;
+
+            parcelsPositionLookup[i].index = indexL;
+            parcelsPositionLookup[l].index = indexI;
+        }
+    }
+}
+
+[numthreads(64,1,1)]
+void UpdateParcelsPositionLookupStart(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+    uint hash = parcelsPositionLookup[id.x].hash;
+    if (id.x == 0) {
+        parcelsPositionLookup[hash].start = 0;
+    }
+    else {
+        uint previousHash = parcelsPositionLookup[id.x - 1].hash;
+        if (previousHash != hash) {
+            parcelsPositionLookup[hash].start = id.x;
+        }
+    }
+}
+
+[numthreads(8,8,1)]
+void TransferCellCenterMass(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+
+    int2 cellPosition = id.xy;
+    for (int x = cellPosition.x - 1; x <= cellPosition.x + 1; ++x) {
+        for (int y = cellPosition.y - 1; y <= cellPosition.y + 1; ++y) {
+            uint hash = GetCellHash(ClampCoordinates(x, y));
+
+            // Add mass for each Parcel that contributes to the current cell
+            int startIndex = parcelsPositionLookup[hash].start;
+            while (startIndex >= 0 && startIndex < (int)count && parcelsPositionLookup[startIndex].hash == hash) {
+                int parcelIndex = parcelsPositionLookup[startIndex].index;
+                float2 p = parcelsData[parcelIndex].position;
+                float m = parcelsData[parcelIndex].mass;
+
+                // Only Parcels near enough contribute to the cell mass
+                float2 dp = abs(p.xy - (float2)cellPosition.xy);
+                if (dp.x < 1 && dp.y < 1) {
+                    float weight = (1 - dp.x) * (1 - dp.y);
+                    float mass = m * weight;
+                    float3 smoke = smokeMap[cellPosition].xyz + mass;
+                    smokeMap[cellPosition] = float4(smoke, smokeMap[cellPosition].a);
+                }
+                ++startIndex;
+            }
+        }
+    }
+}
+
+void TransferCellEdgeMassAxis(uint2 edgeIndex, uint axis) {
+    int xOffset = (axis == AXIS_X) ? 0 : 1;
+    int yOffset = (axis == AXIS_Y) ? 0 : 1;
+
+    float2 edgePosition = float2(
+        (axis == AXIS_X) ? (float)edgeIndex.x - 0.5 : edgeIndex.x,
+        (axis == AXIS_Y) ? (float)edgeIndex.y - 0.5 : edgeIndex.y
+    );
+    float2 mass = edgeMassMap[edgeIndex].xy;
+    for (int x = (int)edgeIndex.x - 1; x <= (int)edgeIndex.x + xOffset; ++x) {
+        for (int y = (int)edgeIndex.y - 1; y <= (int)edgeIndex.y + yOffset; ++y) {
+            uint2 cellPosition = ClampCoordinates(x, y);
+            uint hash = GetCellHash(cellPosition.xy);
+
+            int startIndex = parcelsPositionLookup[hash].start;
+            while (startIndex >= 0 && startIndex < (int)count && parcelsPositionLookup[startIndex].hash == hash) {
+                int parcelIndex = parcelsPositionLookup[startIndex].index;
+                float2 p = parcelsData[parcelIndex].position;
+                float m = parcelsData[parcelIndex].mass;
+
+                // Only Parcels near enough contribute to the cell mass
+                float2 dp = abs(p.xy - edgePosition.xy);
+                if (dp.x < 1 && dp.y < 1) {
+                    float weight = (1 - dp.x) * (1 - dp.y);
+                    switch(axis) {
+                        case AXIS_X:
+                            mass.x += m * weight;
+                            break;
+                        case AXIS_Y:
+                            mass.y += m * weight;
+                            break;
+                    }
+                }
+                ++startIndex;
+            }
+        }
+    }
+    edgeMassMap[edgeIndex] = mass;
+}
+
+[numthreads(64,1,1)]
+void TransferCellEdgeMass(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    TransferCellEdgeMassAxis(id.xy, AXIS_X);
+    TransferCellEdgeMassAxis(id.xy, AXIS_Y);
+}
+
+[numthreads(64,1,1)]
+void TransferMomentum(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
 }
 
 [numthreads(8,8,1)]

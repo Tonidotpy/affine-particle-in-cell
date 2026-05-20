@@ -1,0 +1,31 @@
+#pragma kernel Init
+
+// --- Structures --- //
+struct ParcelsData {
+    float mass;
+    float2 position;
+    float2 velocity;
+    float2 cx;
+    float2 cy;
+};
+
+// --- Settings --- //
+const uint count;
+
+// --- Buffers --- //
+RWStructuredBuffer<ParcelsData> parcelsData;
+
+// --- Kernels --- //
+[numthreads(64,1,1)]
+void Init(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+
+    // TODO: Remove
+    parcelsData[id.x].mass = 1;
+    // parcelsData[id.x].position = float2(cos(id.x), sin(id.x)) * 5 + 10;
+
+    parcelsData[0].position = 1;
+    parcelsData[1].position = 5.5;
+    parcelsData[2].position = float2(1, 5.5);
+    parcelsData[3].position = float2(5.5, 1);
+}

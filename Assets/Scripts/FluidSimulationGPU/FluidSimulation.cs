@@ -7,10 +7,11 @@ namespace FluidSimulationGPU {
 /// </summary>
 public class FluidSimulation {
     FluidGridManager gridManager;
+    FluidParcelsManager parcelsManager;
     Vector2 gravity = new Vector2(0, -9.81f); // m/s^2
     float fluidDensity = 1.3f;                // kg/m^2
 
-    float ambientTemperature = 300f;          // K
+    float ambientTemperature = 300f; // K
     float smokeDiffusionMultiplier = 0.3f;
     float smokeDecayMultiplier = 1f;
     float smokeBuoyancyMultiplier = 1f;
@@ -37,6 +38,13 @@ public class FluidSimulation {
     /// </summary>
     public FluidGridManager GridManager {
         get { return gridManager; }
+    }
+
+    /// <summary>
+    /// Get the Parcels manager
+    /// </summary>
+    public FluidParcelsManager ParcelsManager {
+        get { return parcelsManager; }
     }
 
     /// <summary>
@@ -137,8 +145,10 @@ public class FluidSimulation {
         set { temperatureBuoyancyMultiplier = Mathf.Max(value, 0); }
     }
 
-    public FluidSimulation(int gridWidth, int gridHeight, ComputeShader gridCompute) {
-        gridManager = new FluidGridManager(gridWidth, gridHeight, gridCompute);
+    public FluidSimulation(int gridWidth, int gridHeight, ComputeShader gridCompute, int parcelsCount,
+                           ComputeShader parcelsCompute) {
+        parcelsManager = new FluidParcelsManager(parcelsCount, parcelsCompute);
+        gridManager = new FluidGridManager(gridWidth, gridHeight, gridCompute, parcelsManager);
     }
 
     /// <summary>
@@ -146,7 +156,8 @@ public class FluidSimulation {
     /// </summary>
     public void SetupStep() {
         UpdateGridSettings();
-        gridManager.Setup();
+        parcelsManager.Setup();
+        gridManager.Setup(parcelsManager);
     }
 
     /// <summary>
@@ -158,14 +169,16 @@ public class FluidSimulation {
         gridManager.SolvePressure(solverIterations, timeStep);
         gridManager.UpdateVelocities(timeStep);
 
+        gridManager.TransferParcelsData(parcelsManager, timeStep);
+
         // For advection the fluid is required to be divergence free
         // so this step is done immediately after the pressure correction
-        gridManager.AdvectSmoke(timeStep);
-        gridManager.AdvectVelocities(timeStep);
+        // gridManager.AdvectSmoke(timeStep);
+        // gridManager.AdvectVelocities(timeStep);
 
         // Any other step may increase the divergence of the fluid
-        gridManager.AddSmokeFromSources(timeStep);
-        gridManager.AddBuoyancyForce(timeStep);
+        // gridManager.AddSmokeFromSources(timeStep);
+        // gridManager.AddBuoyancyForce(timeStep);
     }
 
     public void HandleInput() {
@@ -178,6 +191,7 @@ public class FluidSimulation {
 
     public void Clean() {
         gridManager.ReleaseTextures();
+        parcelsManager.ReleaseBuffers();
     }
 
     void UpdateGridSettings() {
