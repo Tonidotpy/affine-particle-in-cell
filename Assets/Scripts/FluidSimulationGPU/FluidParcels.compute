@@ -1,4 +1,5 @@
 #pragma kernel Init
+#pragma kernel TransferVelocities
 
 // --- Structures --- //
 struct ParcelsData {
@@ -11,9 +12,20 @@ struct ParcelsData {
 
 // --- Settings --- //
 const uint count;
+const uint2 gridResolution;
 
 // --- Buffers --- //
 RWStructuredBuffer<ParcelsData> parcelsData;
+Texture2D<float2> velocityMap;
+
+// --- Utilities --- //
+uint2 ClampCoordinates(int i, int j) {
+    return (uint2)clamp(int2(i, j), 0, (int2)gridResolution - 1);
+}
+
+bool IsInCellCenterBounds(int i, int j) {
+    return i >= 0 && i < (int)gridResolution.x && j >= 0 && j < (int)gridResolution.y;
+}
 
 // --- Kernels --- //
 [numthreads(64,1,1)]
@@ -25,7 +37,53 @@ void Init(uint3 id : SV_DispatchThreadID) {
     // parcelsData[id.x].position = float2(cos(id.x), sin(id.x)) * 5 + 10;
 
     parcelsData[0].position = 1;
+    parcelsData[0].velocity = 1;
     parcelsData[1].position = 5.5;
+    parcelsData[1].velocity = -1;
     parcelsData[2].position = float2(1, 5.5);
+    parcelsData[2].velocity = float2(1, -1);
     parcelsData[3].position = float2(5.5, 1);
+    parcelsData[3].velocity = float2(-1, 1);
+}
+
+[numthreads(64,1,1)]
+void TransferVelocities(uint3 id : SV_DispatchThreadID) {
+    return;
+    if (id.x >= count) return;
+    float2 v = 0;
+    float2 p = parcelsData[id.x].position;
+
+    int j = 0;
+    int2 cellPosition = floor(p.xy);
+    int x[] = { cellPosition.x, cellPosition.x + 1, cellPosition.x, cellPosition.x + 1 };
+    int y[] = { cellPosition.y, cellPosition.y, cellPosition.y + 1, cellPosition.y + 1 };
+    // Horizontal velocity
+    float2 xCellFrac = p.xy - float2(cellPosition.x - 0.5, cellPosition.y);
+    float xWeight[] = {
+        (1.0 - xCellFrac.x) * (1.0 - xCellFrac.y),
+        (      xCellFrac.x) * (1.0 - xCellFrac.y),
+        (1.0 - xCellFrac.x) * (      xCellFrac.y),
+        (      xCellFrac.x) * (      xCellFrac.y)
+    };
+    for (j = 0; j < 4; ++j) {
+        int2 index = int2(x[j], y[j]);
+        float velocity = velocityMap[index].x;
+        v.x += xWeight[j] * velocity;
+    }
+
+    // Vertical velocity
+    float2 yCellFrac = p.xy - float2(cellPosition.x, cellPosition.y - 0.5);
+    float yWeight[] = {
+        (1.0 - yCellFrac.x) * (1.0 - yCellFrac.y),
+        (      yCellFrac.x) * (1.0 - yCellFrac.y),
+        (1.0 - yCellFrac.x) * (      yCellFrac.y),
+        (      yCellFrac.x) * (      yCellFrac.y)
+    };
+    for (j = 0; j < 4; ++j) {
+        int2 index = int2(x[j], y[j]);
+        float velocity = velocityMap[index].y;
+        v.y += yWeight[j] * velocity;
+    }
+
+    parcelsData[id.x].velocity = v;
 }

@@ -156,7 +156,7 @@ public class FluidSimulation {
     /// </summary>
     public void SetupStep() {
         UpdateGridSettings();
-        parcelsManager.Setup();
+        parcelsManager.Setup(gridManager);
         gridManager.Setup(parcelsManager);
     }
 

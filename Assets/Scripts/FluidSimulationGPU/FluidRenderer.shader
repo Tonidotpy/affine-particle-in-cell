@@ -23,11 +23,12 @@ Shader "Unlit/FluidRenderer" {
 
 // Visualization modes
 #define VISUALIZATION_MODE_DEBUG (0)
-#define VISUALIZATION_MODE_VELOCITY (1)
-#define VISUALIZATION_MODE_DIVERGENCE (2)
-#define VISUALIZATION_MODE_PRESSURE (3)
-#define VISUALIZATION_MODE_TEMPERATURE (4)
-#define VISUALIZATION_MODE_SMOKE (5)
+#define VISUALIZATION_MODE_MOMENTUM (1)
+#define VISUALIZATION_MODE_VELOCITY (2)
+#define VISUALIZATION_MODE_DIVERGENCE (3)
+#define VISUALIZATION_MODE_PRESSURE (4)
+#define VISUALIZATION_MODE_TEMPERATURE (5)
+#define VISUALIZATION_MODE_SMOKE (6)
 
             struct appdata {
                 float4 vertex : POSITION;
@@ -46,6 +47,11 @@ Shader "Unlit/FluidRenderer" {
             // Obstacles
             sampler2D cellType;
             fixed4 obstacleColor;
+
+            // Momentum
+            sampler2D momentumMap;
+            float momentumDisplayRange;
+            int momentumChannel;
 
             // Velocity
             sampler2D velocityMap;
@@ -88,6 +94,16 @@ Shader "Unlit/FluidRenderer" {
             fixed4 RenderDebug(v2f i) {
                 float4 val = tex2D(debugMap, i.uv);
                 fixed4 col = fixed4(val.xyz, 1);
+                return col;
+            }
+
+            fixed4 RenderMomentum(v2f i) {
+                float2 momentum = tex2D(momentumMap, i.uv).rg;
+                fixed4 col = fixed4(0, 0, 0, 1);
+                if (momentumChannel == VELOCITY_CHANNEL_X || momentumChannel == VELOCITY_CHANNEL_BOTH)
+                    col.r = abs(momentum.x * momentumDisplayRange);
+                if (momentumChannel == VELOCITY_CHANNEL_Y || momentumChannel == VELOCITY_CHANNEL_BOTH)
+                    col.g = (momentum.y * momentumDisplayRange);
                 return col;
             }
 
@@ -157,6 +173,8 @@ Shader "Unlit/FluidRenderer" {
 
                 if (visualizationMode == VISUALIZATION_MODE_DEBUG)
                     col = RenderDebug(i);
+                else if (visualizationMode == VISUALIZATION_MODE_MOMENTUM)
+                    col = RenderMomentum(i);
                 else if (visualizationMode == VISUALIZATION_MODE_VELOCITY)
                     col = RenderVelocity(i);
                 else if (visualizationMode == VISUALIZATION_MODE_DIVERGENCE)

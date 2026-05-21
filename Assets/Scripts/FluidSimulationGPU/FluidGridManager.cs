@@ -9,12 +9,14 @@ public class FluidGridManager {
     enum ComputeKernel {
         Init,
         ClearSmoke,
+        ClearMomentum,
         UpdateParcelsPositionLookupHash,
         LookupBitonicSortStep,
         UpdateParcelsPositionLookupStart,
         TransferCellCenterMass,
         TransferCellEdgeMass,
         TransferMomentum,
+        EnforceSolidBoundaryConditions,
         AdvectVelocities,
         VelocityAdvectionReadback,
         AdvectSmoke,
@@ -84,6 +86,7 @@ public class FluidGridManager {
     public RenderTexture smokeMap;
     public RenderTexture smokeMapAdvected;
     public RenderTexture edgeMassMap;
+    public RenderTexture edgeMomentumMap;
 
     public FluidObstacle[] obstacles;
     public ComputeBuffer obstacleData;
@@ -129,8 +132,10 @@ public class FluidGridManager {
                                           GraphicsFormat.R32G32B32A32_SFloat);
         ComputeHelper.CreateRenderTexture(ref edgeMassMap, resolution.x, resolution.y, FilterMode.Point,
                                           GraphicsFormat.R32G32_SFloat);
-        ComputeHelper.CreateStructuredBuffer<ParcelsPositionLookup>(ref parcelsPositionLookup,
-                                                                    resolution.x * resolution.y);
+        ComputeHelper.CreateRenderTexture(ref edgeMomentumMap, resolution.x, resolution.y, FilterMode.Point,
+                                          GraphicsFormat.R32G32_SFloat);
+        ComputeHelper.CreateStructuredBuffer<ParcelsPositionLookup>(
+            ref parcelsPositionLookup, Mathf.Max(resolution.x * resolution.y, parcels.Count));
     }
 
     void BindTextures() {
@@ -145,6 +150,7 @@ public class FluidGridManager {
         ComputeHelper.SetTexture(compute, smokeMap, "smokeMapSample", computeKernels);
         ComputeHelper.SetTexture(compute, smokeMapAdvected, "smokeMapAdvected", computeKernels);
         ComputeHelper.SetTexture(compute, edgeMassMap, "edgeMassMap", computeKernels);
+        ComputeHelper.SetTexture(compute, edgeMomentumMap, "edgeMomentumMap", computeKernels);
         ComputeHelper.SetBuffer(compute, parcelsPositionLookup, "parcelsPositionLookup", computeKernels);
     }
 
@@ -184,11 +190,13 @@ public class FluidGridManager {
         UpdateParcelsPositionLookup(parcels);
 
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.ClearSmoke);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.ClearMomentum);
+
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.TransferCellCenterMass);
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.TransferCellEdgeMass);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.TransferMomentum);
 
-        // TODO: Refactor to parallelize by grid instead of by particle
-        // ComputeHelper.Dispatch(compute, parcels.Count, 1, ComputeKernel.TransferMomentum);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.EnforceSolidBoundaryConditions);
     }
 
     /// <summary>
@@ -380,7 +388,7 @@ public class FluidGridManager {
         ComputeHelper.Release(pressureSolverData, obstacleIndices, obstacleVertices, obstacleTriangles,
                               parcelsPositionLookup);
         ComputeHelper.Release(debugMap, cellType, velocityMap, velocityMapAdvected, pressureMap, smokeMap,
-                              smokeMapAdvected, edgeMassMap);
+                              smokeMapAdvected, edgeMassMap, edgeMomentumMap);
     }
 }
 }

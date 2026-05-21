@@ -11,6 +11,7 @@ public class FluidRendererManager : MonoBehaviour {
     /// </summary>
     public enum VisualizationMode {
         Debug,
+        Momentum,
         Velocity,
         Divergence,
         Pressure,
@@ -45,6 +46,10 @@ public class FluidRendererManager : MonoBehaviour {
     [Header("Grid settings")]
     [Min(0.1f)]
     public float cellSize = 1f;
+
+    [Header("Momentum")]
+    public float momentumDisplayRange = 1f;
+    public VelocityChannel momentumChannel = VelocityChannel.Both;
 
     [Header("Velocity")]
     public float velocityDisplayRange = 1f;
@@ -100,6 +105,11 @@ public class FluidRendererManager : MonoBehaviour {
         // Obstacles
         material.SetTexture("cellType", grid.cellType);
         material.SetVector("obstacleColor", obstacleColor);
+
+        // Momentum
+        material.SetTexture("momentumMap", grid.edgeMomentumMap);
+        material.SetInteger("momentumChannel", (int)momentumChannel);
+        material.SetFloat("momentumDisplayRange", momentumDisplayRange);
 
         // Velocity
         material.SetTexture("velocityMap", grid.velocityMap);

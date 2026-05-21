@@ -1,11 +1,13 @@
 #pragma kernel Init
 #pragma kernel ClearSmoke
+#pragma kernel ClearMomentum
 #pragma kernel UpdateParcelsPositionLookupHash
 #pragma kernel LookupBitonicSortStep
 #pragma kernel UpdateParcelsPositionLookupStart
 #pragma kernel TransferCellCenterMass
 #pragma kernel TransferCellEdgeMass
 #pragma kernel TransferMomentum
+#pragma kernel EnforceSolidBoundaryConditions
 #pragma kernel AdvectVelocities
 #pragma kernel VelocityAdvectionReadback
 #pragma kernel AdvectSmoke
@@ -117,6 +119,7 @@ RWStructuredBuffer<PressureSolverData> pressureSolverData;
 RWTexture2D<float4> smokeMap;
 RWTexture2D<float4> smokeMapAdvected;
 RWTexture2D<float2> edgeMassMap;
+RWTexture2D<float2> edgeMomentumMap;
 
 // --- Samplers --- //
 Texture2D<float2> velocityMapSample;
@@ -245,12 +248,12 @@ bool IsPointInTriangle(float2 p, float2 v0, float2 v1, float2 v2) {
 [numthreads(8,8,1)]
 void Init(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
-
     cellType[id.xy] = float4(CELL_TYPE_FLUID, -1, 0, 0);
     velocityMap[id.xy] = 0;
     pressureMap[id.xy] = 0;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
     edgeMassMap[id.xy] = 0;
+    edgeMomentumMap[id.xy] = 0;
     debugMap[id.xy] = 0;
 }
 
@@ -259,6 +262,12 @@ void ClearSmoke(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
     smokeMap[id.xy] = float4(0, 0, 0, ambientTemperature);
     edgeMassMap[id.xy] = 0;
+}
+
+[numthreads(8,8,1)]
+void ClearMomentum(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    edgeMomentumMap[id.xy] = 0;
 }
 
 [numthreads(64,1,1)]
@@ -382,32 +391,96 @@ void TransferCellEdgeMassAxis(uint2 edgeIndex, uint axis) {
                 float2 dp = abs(p.xy - edgePosition.xy);
                 if (dp.x < 1 && dp.y < 1) {
                     float weight = (1 - dp.x) * (1 - dp.y);
-                    switch(axis) {
-                        case AXIS_X:
-                            mass.x += m * weight;
-                            break;
-                        case AXIS_Y:
-                            mass.y += m * weight;
-                            break;
-                    }
+                    mass.x += (axis == AXIS_X) ? m * weight : 0;
+                    mass.y += (axis == AXIS_Y) ? m * weight : 0;
                 }
                 ++startIndex;
             }
         }
     }
-    edgeMassMap[edgeIndex] = mass;
+    edgeMassMap[edgeIndex] = mass.xy;
 }
 
 [numthreads(64,1,1)]
 void TransferCellEdgeMass(uint3 id : SV_DispatchThreadID) {
+    // BUG: Code works only when modifying and reloading shader.
+    // It is probably a compiler aggresive optimization bug but I don't know
+    // what's the cause of it.
     if (id.x >= resolution.x || id.y >= resolution.y) return;
     TransferCellEdgeMassAxis(id.xy, AXIS_X);
     TransferCellEdgeMassAxis(id.xy, AXIS_Y);
 }
 
-[numthreads(64,1,1)]
+void TransferCellEdgeMomentumAxis(uint2 edgeIndex, uint axis) {
+    int xOffset = (axis == AXIS_X) ? 0 : 1;
+    int yOffset = (axis == AXIS_Y) ? 0 : 1;
+    float2 edgePosition = float2(
+        (axis == AXIS_X) ? (float)edgeIndex.x - 0.5 : edgeIndex.x,
+        (axis == AXIS_Y) ? (float)edgeIndex.y - 0.5 : edgeIndex.y
+    );
+
+    float2 momentum = edgeMomentumMap[edgeIndex];
+    for (int x = (int)edgeIndex.x - 1; x <= (int)edgeIndex.x + xOffset; ++x) {
+        for (int y = (int)edgeIndex.y - 1; y <= (int)edgeIndex.y + yOffset; ++y) {
+            uint2 cellPosition = ClampCoordinates(x, y);
+            uint hash = GetCellHash(cellPosition.xy);
+
+            int startIndex = parcelsPositionLookup[hash].start;
+            while (startIndex >= 0 && startIndex < (int)count && parcelsPositionLookup[startIndex].hash == hash) {
+                int parcelIndex = parcelsPositionLookup[startIndex].index;
+                float2 p = parcelsData[parcelIndex].position;
+                float2 v = parcelsData[parcelIndex].velocity;
+                float m = parcelsData[parcelIndex].mass;
+                float2 c = axis == AXIS_X ? parcelsData[parcelIndex].cx : parcelsData[parcelIndex].cy;
+
+                // Only Parcels near enough contribute to the cell mass
+                float2 dp = edgePosition.xy - p.xy;
+                float2 absDp = abs(dp);
+                if (absDp.x < 1 && absDp.y < 1) {
+                    float weight = (1 - absDp.x) * (1 - absDp.y);
+                    momentum.x += (axis == AXIS_X) ? (m * weight * (v.x + dot(c, dp))) : 0;
+                    momentum.y += (axis == AXIS_Y) ? (m * weight * (v.y + dot(c, dp))) : 0;
+                }
+                ++startIndex;
+            }
+        }
+    }
+    edgeMomentumMap[edgeIndex] = momentum.xy;
+}
+
+void TransferVelocities(uint2 id) {
+}
+
+[numthreads(8,8,1)]
 void TransferMomentum(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= count) return;
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    TransferCellEdgeMomentumAxis(id.xy, AXIS_X);
+    TransferCellEdgeMomentumAxis(id.xy, AXIS_Y);
+
+    float2 m = edgeMassMap[id.xy];
+    float2 v = 0;
+    v.x = edgeMomentumMap[id.xy].x / m.x;
+    v.y = edgeMomentumMap[id.xy].y / m.y;
+    velocityMap[id.xy] = v;
+}
+
+[numthreads(8,8,1)]
+void EnforceSolidBoundaryConditions(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    float2 velocity = velocityMap[id.xy];
+    bool isSolid = (GetCellType(id.x, id.y) == CELL_TYPE_SOLID);
+
+    // Horizontal velocity
+    bool isSolidLeft = (GetCellType((int)id.x - 1, id.y) == CELL_TYPE_SOLID);
+    if (isSolidLeft || isSolid)
+        velocity.x = 0;
+
+    // Vertical velocity
+    bool isSolidBottom = (GetCellType(id.x, (int)id.y - 1) == CELL_TYPE_SOLID);
+    if (isSolidBottom || isSolid)
+        velocity.y = 0;
+
+    velocityMap[id.xy] = velocity;
 }
 
 [numthreads(8,8,1)]

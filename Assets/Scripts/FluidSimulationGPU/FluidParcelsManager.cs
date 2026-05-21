@@ -5,7 +5,8 @@ using Seb.Helpers;
 namespace FluidSimulationGPU {
 public class FluidParcelsManager {
     enum ComputeKernel {
-        Init
+        Init,
+        TransferVelocities
     }
 
     struct ParcelsData {
@@ -27,26 +28,29 @@ public class FluidParcelsManager {
         Count = count < 1 ? 1 : count;
         this.compute = compute;
 
-        Setup();
+        CreateBuffers();
+        ComputeHelper.SetBuffer(compute, parcelsData, "parcelsData", computeKernels);
         ComputeHelper.Dispatch(compute, count, 1, ComputeKernel.Init);
     }
 
-    public void Setup() {
+    public void Setup(FluidGridManager gridManager) {
         CreateBuffers();
-        BindBuffers();
-        BindSettings();
+        BindBuffers(gridManager);
+        BindSettings(gridManager);
     }
 
     void CreateBuffers() {
         ComputeHelper.CreateStructuredBuffer<ParcelsData>(ref parcelsData, Count);
     }
 
-    void BindBuffers() {
+    void BindBuffers(FluidGridManager gridManager) {
         ComputeHelper.SetBuffer(compute, parcelsData, "parcelsData", computeKernels);
+        ComputeHelper.SetTexture(compute, gridManager.velocityMap, "velocityMap", computeKernels);
     }
 
-    void BindSettings() {
+    void BindSettings(FluidGridManager gridManager) {
         compute.SetInt("count", Count);
+        compute.SetInts("gridResolution", gridManager.resolution.x, gridManager.resolution.y);
     }
 
     public void ReleaseBuffers() {
