@@ -1,5 +1,6 @@
 #pragma kernel Init
 #pragma kernel TransferVelocities
+#pragma kernel UpdateAffineState
 
 // --- Structures --- //
 struct ParcelsData {
@@ -48,42 +49,104 @@ void Init(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(64,1,1)]
 void TransferVelocities(uint3 id : SV_DispatchThreadID) {
-    return;
     if (id.x >= count) return;
     float2 v = 0;
     float2 p = parcelsData[id.x].position;
 
-    int j = 0;
-    int2 cellPosition = floor(p.xy);
-    int x[] = { cellPosition.x, cellPosition.x + 1, cellPosition.x, cellPosition.x + 1 };
-    int y[] = { cellPosition.y, cellPosition.y, cellPosition.y + 1, cellPosition.y + 1 };
     // Horizontal velocity
-    float2 xCellFrac = p.xy - float2(cellPosition.x - 0.5, cellPosition.y);
-    float xWeight[] = {
-        (1.0 - xCellFrac.x) * (1.0 - xCellFrac.y),
-        (      xCellFrac.x) * (1.0 - xCellFrac.y),
-        (1.0 - xCellFrac.x) * (      xCellFrac.y),
-        (      xCellFrac.x) * (      xCellFrac.y)
-    };
-    for (j = 0; j < 4; ++j) {
-        int2 index = int2(x[j], y[j]);
-        float velocity = velocityMap[index].x;
-        v.x += xWeight[j] * velocity;
+    {
+        int xEdge = floor(p.x + 0.5);
+        int yCell = floor(p.y);
+        int x[] = { xEdge, xEdge + 1, xEdge, xEdge + 1 };
+        int y[] = { yCell, yCell, yCell + 1, yCell + 1 };
+
+        float2 cellFrac = p.xy - float2(xEdge - 0.5, yCell);
+        float weight[] = {
+            (1.0 - cellFrac.x) * (1.0 - cellFrac.y),
+            (      cellFrac.x) * (1.0 - cellFrac.y),
+            (1.0 - cellFrac.x) * (      cellFrac.y),
+            (      cellFrac.x) * (      cellFrac.y)
+        };
+        for (int j = 0; j < 4; ++j) {
+            uint2 index = ClampCoordinates(x[j], y[j]);
+            float velocity = velocityMap[index].x;
+            v.x += weight[j] * velocity;
+        }
     }
 
     // Vertical velocity
-    float2 yCellFrac = p.xy - float2(cellPosition.x, cellPosition.y - 0.5);
-    float yWeight[] = {
-        (1.0 - yCellFrac.x) * (1.0 - yCellFrac.y),
-        (      yCellFrac.x) * (1.0 - yCellFrac.y),
-        (1.0 - yCellFrac.x) * (      yCellFrac.y),
-        (      yCellFrac.x) * (      yCellFrac.y)
-    };
-    for (j = 0; j < 4; ++j) {
-        int2 index = int2(x[j], y[j]);
-        float velocity = velocityMap[index].y;
-        v.y += yWeight[j] * velocity;
+    {
+        int xCell = floor(p.x);
+        int yEdge = floor(p.y + 0.5);
+        int x[] = { xCell, xCell + 1, xCell, xCell + 1 };
+        int y[] = { yEdge, yEdge, yEdge + 1, yEdge + 1 };
+
+        float2 cellFrac = p.xy - float2(xCell, yEdge - 0.5);
+        float weight[] = {
+            (1.0 - cellFrac.x) * (1.0 - cellFrac.y),
+            (      cellFrac.x) * (1.0 - cellFrac.y),
+            (1.0 - cellFrac.x) * (      cellFrac.y),
+            (      cellFrac.x) * (      cellFrac.y)
+        };
+        for (int j = 0; j < 4; ++j) {
+            uint2 index = ClampCoordinates(x[j], y[j]);
+            float velocity = velocityMap[index].y;
+            v.y += weight[j] * velocity;
+        }
     }
 
     parcelsData[id.x].velocity = v;
+}
+
+[numthreads(64,1,1)]
+void UpdateAffineState(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+    float2 p = parcelsData[id.x].position;
+
+    // Horizontal axis
+    {
+        int xEdge = floor(p.x + 0.5);
+        int yCell = floor(p.y);
+        int x[] = { xEdge, xEdge + 1, xEdge, xEdge + 1 };
+        int y[] = { yCell, yCell, yCell + 1, yCell + 1 };
+
+        float2 cellFrac = p.xy - float2(xEdge - 0.5, yCell);
+        float2 weightGradient[] = {
+            float2(cellFrac.y - 1, cellFrac.x - 1),
+            float2(1 - cellFrac.y,    -cellFrac.x),
+            float2(   -cellFrac.y, 1 - cellFrac.x),
+            float2(    cellFrac.y,     cellFrac.x)
+        };
+
+        float2 c = 0;
+        for (int j = 0; j < 4; ++j) {
+            uint2 index = ClampCoordinates(x[j], y[j]);
+            float velocity = velocityMap[index].x;
+            c += weightGradient[j] * velocity;
+        }
+        parcelsData[id.x].cx = c;
+    }
+    // Vertical axis
+    {
+        int xCell = floor(p.x);
+        int yEdge = floor(p.y + 0.5);
+        int x[] = { xCell, xCell + 1, xCell, xCell + 1 };
+        int y[] = { yEdge, yEdge, yEdge + 1, yEdge + 1 };
+
+        float2 cellFrac = p.xy - float2(xCell, yEdge - 0.5);
+        float2 weightGradient[] = {
+            float2(cellFrac.y - 1, cellFrac.x - 1),
+            float2(1 - cellFrac.y,    -cellFrac.x),
+            float2(   -cellFrac.y, 1 - cellFrac.x),
+            float2(    cellFrac.y,     cellFrac.x)
+        };
+
+        float2 c = 0;
+        for (int j = 0; j < 4; ++j) {
+            uint2 index = ClampCoordinates(x[j], y[j]);
+            float velocity = velocityMap[index].y;
+            c += weightGradient[j] * velocity;
+        }
+        parcelsData[id.x].cy = c;
+    }
 }

@@ -169,6 +169,9 @@ public class FluidSimulation {
         gridManager.SolvePressure(solverIterations, timeStep);
         gridManager.UpdateVelocities(timeStep);
 
+        parcelsManager.TransferGridData(gridManager);
+        parcelsManager.UpdateAffineState(gridManager);
+
         gridManager.TransferParcelsData(parcelsManager, timeStep);
 
         // For advection the fluid is required to be divergence free

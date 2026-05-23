@@ -6,7 +6,8 @@ namespace FluidSimulationGPU {
 public class FluidParcelsManager {
     enum ComputeKernel {
         Init,
-        TransferVelocities
+        TransferVelocities,
+        UpdateAffineState
     }
 
     struct ParcelsData {
@@ -51,6 +52,14 @@ public class FluidParcelsManager {
     void BindSettings(FluidGridManager gridManager) {
         compute.SetInt("count", Count);
         compute.SetInts("gridResolution", gridManager.resolution.x, gridManager.resolution.y);
+    }
+
+    public void TransferGridData(FluidGridManager gridManager) {
+        ComputeHelper.Dispatch(compute, Count, 1, ComputeKernel.TransferVelocities);
+    }
+
+    public void UpdateAffineState(FluidGridManager gridManager) {
+        ComputeHelper.Dispatch(compute, Count, 1, ComputeKernel.UpdateAffineState);
     }
 
     public void ReleaseBuffers() {
