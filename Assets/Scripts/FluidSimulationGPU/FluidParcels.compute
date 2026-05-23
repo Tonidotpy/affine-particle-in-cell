@@ -1,6 +1,11 @@
 #pragma kernel Init
 #pragma kernel TransferVelocities
 #pragma kernel UpdateAffineState
+#pragma kernel Advect
+
+// --- Constants --- //
+static const uint CELL_TYPE_SOLID = 0;
+static const uint CELL_TYPE_FLUID = 1;
 
 // --- Structures --- //
 struct ParcelsData {
@@ -12,12 +17,18 @@ struct ParcelsData {
 };
 
 // --- Settings --- //
+const float dt;
+
 const uint count;
 const uint2 gridResolution;
 
 // --- Buffers --- //
 RWStructuredBuffer<ParcelsData> parcelsData;
 Texture2D<float2> velocityMap;
+
+// --- Samplers --- //
+Texture2D<float2> velocityMapSample;
+SamplerState sampler_velocityMapSample;
 
 // --- Utilities --- //
 uint2 ClampCoordinates(int i, int j) {
@@ -26,6 +37,21 @@ uint2 ClampCoordinates(int i, int j) {
 
 bool IsInCellCenterBounds(int i, int j) {
     return i >= 0 && i < (int)gridResolution.x && j >= 0 && j < (int)gridResolution.y;
+}
+
+float2 SampleVelocity(float2 position) {
+    // float2(0.5, 0.5) is added to the position because the textures origin is
+    // not at the center of the pixel but on its bottom left corner
+
+    // Horizontal velocity
+    float2 uvX = saturate((position.xy + float2(1, 0.5)) / float2(gridResolution.xy));
+    float velocityX = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvX, 0).x;
+
+    // Vertical velocity
+    float2 uvY = saturate((position.xy + float2(0.5, 1.0)) / float2(gridResolution.xy));
+    float velocityY = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvY, 0).y;
+
+    return float2(velocityX, velocityY);
 }
 
 // --- Kernels --- //
@@ -149,4 +175,30 @@ void UpdateAffineState(uint3 id : SV_DispatchThreadID) {
         }
         parcelsData[id.x].cy = c;
     }
+}
+
+[numthreads(64,1,1)]
+void Advect(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+    float2 p = parcelsData[id.x].position;
+    float2 k1 = parcelsData[id.x].velocity;
+    float2 k2 = SampleVelocity(p + k1 * (dt * 0.5));
+    float2 k3 = SampleVelocity(p + k2 * (dt * 0.5));
+    float2 k4 = SampleVelocity(p + k3 * dt);
+
+    // RK4 implementation
+    float2 dp = (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4);
+    float dpLength = length(dp);
+    if (dpLength == 0) { return; }
+
+    // This adds dissipation but simplify collisions but it does not
+    // happen that frequently. The magnitude usually seats between 0 and 1
+    if (dpLength > 1) { saturate(dp); }
+
+    float2 positionNext = p + dp;
+    int2 cellPosition = floor(positionNext + 0.5);
+
+    // TODO: Handle Solid obstacles
+
+    parcelsData[id.x].position = positionNext;
 }

@@ -7,7 +7,8 @@ public class FluidParcelsManager {
     enum ComputeKernel {
         Init,
         TransferVelocities,
-        UpdateAffineState
+        UpdateAffineState,
+        Advect
     }
 
     struct ParcelsData {
@@ -47,6 +48,7 @@ public class FluidParcelsManager {
     void BindBuffers(FluidGridManager gridManager) {
         ComputeHelper.SetBuffer(compute, parcelsData, "parcelsData", computeKernels);
         ComputeHelper.SetTexture(compute, gridManager.velocityMap, "velocityMap", computeKernels);
+        ComputeHelper.SetTexture(compute, gridManager.velocityMap, "velocityMapSample", computeKernels);
     }
 
     void BindSettings(FluidGridManager gridManager) {
@@ -60,6 +62,11 @@ public class FluidParcelsManager {
 
     public void UpdateAffineState(FluidGridManager gridManager) {
         ComputeHelper.Dispatch(compute, Count, 1, ComputeKernel.UpdateAffineState);
+    }
+
+    public void Advect(FluidGridManager gridManager, float dt) {
+        compute.SetFloat("dt", dt);
+        ComputeHelper.Dispatch(compute, Count, 1, ComputeKernel.Advect);
     }
 
     public void ReleaseBuffers() {
