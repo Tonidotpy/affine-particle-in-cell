@@ -134,8 +134,8 @@ public class FluidGridManager {
                                           GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref edgeMomentumMap, resolution.x, resolution.y, FilterMode.Point,
                                           GraphicsFormat.R32G32_SFloat);
-        ComputeHelper.CreateStructuredBuffer<ParcelsPositionLookup>(
-            ref parcelsPositionLookup, Mathf.Max(resolution.x * resolution.y, parcels.Count));
+        int bufferSize = Mathf.Max(Mathf.NextPowerOfTwo(parcels.Count), resolution.x * resolution.y * 2);
+        ComputeHelper.CreateStructuredBuffer<ParcelsPositionLookup>(ref parcelsPositionLookup, bufferSize);
     }
 
     void BindTextures() {

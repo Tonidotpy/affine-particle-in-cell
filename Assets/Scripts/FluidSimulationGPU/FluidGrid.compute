@@ -458,9 +458,9 @@ void TransferMomentum(uint3 id : SV_DispatchThreadID) {
     TransferCellEdgeMomentumAxis(id.xy, AXIS_Y);
 
     float2 m = edgeMassMap[id.xy];
-    float2 v = 0;
-    v.x = edgeMomentumMap[id.xy].x / m.x;
-    v.y = edgeMomentumMap[id.xy].y / m.y;
+    float2 v = velocityMap[id.xy].xy;
+    v.x = (m.x > 1e-6) ? edgeMomentumMap[id.xy].x / m.x : v.x;
+    v.y = (m.y > 1e-6) ? edgeMomentumMap[id.xy].y / m.y : v.y;
     velocityMap[id.xy] = v;
 }
 

@@ -61,16 +61,7 @@ void Init(uint3 id : SV_DispatchThreadID) {
 
     // TODO: Remove
     parcelsData[id.x].mass = 1;
-    // parcelsData[id.x].position = float2(cos(id.x), sin(id.x)) * 5 + 10;
-
-    parcelsData[0].position = 1;
-    parcelsData[0].velocity = 1;
-    parcelsData[1].position = 5.5;
-    parcelsData[1].velocity = -1;
-    parcelsData[2].position = float2(1, 5.5);
-    parcelsData[2].velocity = float2(1, -1);
-    parcelsData[3].position = float2(5.5, 1);
-    parcelsData[3].velocity = float2(-1, 1);
+    parcelsData[id.x].position = float2(cos(id.x), sin(id.x)) * 5 + 10;
 }
 
 [numthreads(64,1,1)]
@@ -193,7 +184,9 @@ void Advect(uint3 id : SV_DispatchThreadID) {
 
     // This adds dissipation but simplify collisions but it does not
     // happen that frequently. The magnitude usually seats between 0 and 1
-    if (dpLength > 1) { saturate(dp); }
+    if (dpLength > 1) {
+        dp /= dpLength;
+    }
 
     float2 positionNext = p + dp;
     int2 cellPosition = floor(positionNext + 0.5);
