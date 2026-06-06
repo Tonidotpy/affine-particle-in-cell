@@ -1,13 +1,15 @@
 #pragma kernel Init
 #pragma kernel ClearSmoke
 #pragma kernel ClearMomentum
-#pragma kernel UpdateParcelsPositionLookupHash
-#pragma kernel LookupBitonicSortStep
-#pragma kernel UpdateParcelsPositionLookupStart
-#pragma kernel TransferCellCenterMass
-#pragma kernel TransferCellEdgeMass
-#pragma kernel TransferMomentum
-#pragma kernel EnforceSolidBoundaryConditions
+
+#pragma kernel P2GInit
+#pragma kernel P2GAccumulate
+#pragma kernel P2GBitonicSortStep
+#pragma kernel P2GUpdatePrefixSumIndices
+#pragma kernel P2GReduceStep
+#pragma kernel P2GScanStep
+#pragma kernel P2GTransferData
+
 #pragma kernel AdvectVelocities
 #pragma kernel VelocityAdvectionReadback
 #pragma kernel AdvectSmoke
@@ -25,6 +27,7 @@
 
 // --- Constants --- //
 static const uint UINT_MAX = 0xFFFFFFFF;
+static const uint INT_MAX = 0x7FFFFFFF;
 
 static const uint FLOW_TOP_BIT_POS = 31;
 static const uint FLOW_BOTTOM_BIT_POS = 30;
@@ -70,10 +73,17 @@ struct ParcelsData {
     float2 cy;
 };
 
-struct ParcelsPositionLookup {
-    uint hash;  // Cell hash
-    uint index; // Parcel index
-    int start;  // First parcel with a specific hash
+struct P2GCenterData {
+    float mass;
+    int parcel;
+    uint cell;
+};
+
+struct P2GEdgeData {
+    float mass;
+    float momentum;
+    int parcel;
+    uint cell;
 };
 
 // --- Settings --- //
@@ -128,7 +138,6 @@ Texture2D<float4> smokeMapSample;
 SamplerState sampler_smokeMapSample;
 
 // --- Obstacles --- //
-
 const int obstacleCount;
 StructuredBuffer<ObstacleData> obstacleData;
 StructuredBuffer<ObstacleIndex> obstacleIndices;
@@ -137,11 +146,26 @@ StructuredBuffer<int> obstacleTriangles;
 
 // --- Parcels --- //
 const uint count;
-const uint powerOfTwoCount;
 StructuredBuffer<ParcelsData> parcelsData;
-RWStructuredBuffer<ParcelsPositionLookup> parcelsPositionLookup;
+
+uint bitonicMajorStepIndex;
+uint bitonicMinorStepIndex;
+uint p2gPrefixSumStride;
+bool p2gIsLastPrefixSumStep;
+
+const uint p2gBufferSize;
+const uint p2gBitonicBufferSize;
+RWStructuredBuffer<P2GCenterData> p2gCenterData;
+RWStructuredBuffer<P2GEdgeData> p2gEdgeDataX;
+RWStructuredBuffer<P2GEdgeData> p2gEdgeDataY;
+
+RWStructuredBuffer<int3> p2gReductionStart;
+RWStructuredBuffer<int3> p2gReductionEnd;
 
 // --- Utilities --- //
+
+#define SWAP(a, b, type) { type aux = a; a = b; b = aux; }
+
 uint2 ClampCoordinates(int i, int j) {
     return (uint2)clamp(int2(i, j), 0, (int2)resolution - 1);
 }
@@ -170,16 +194,10 @@ float GetPressure(int i, int j) {
     return GetCellCenterValue(pressureMap, i, j, 0);
 }
 
-uint GetCellHash(uint2 position) {
-    uint hash = 0;
-    for (uint bitX = 0, bitY = 0, bit = 0; bit < 32; ++bitX, ++bitY, bit += 2) {
-        uint x = (position.x & (1 << bitX)) != 0;
-        uint y = (position.y & (1 << bitY)) != 0;
-
-        hash |= x << bit;
-        hash |= y << (bit + 1);
-    }
-    return hash;
+uint GetCellHash(int2 position) {
+    int2 p = position + 2;
+    uint rowLength = resolution.x + 4;
+    return p.y * rowLength + p.x;
 }
 
 uint2 GetCheckerboardCellCoordinates(uint index, uint passIndex, uint2 resolution) {
@@ -271,216 +289,166 @@ void ClearMomentum(uint3 id : SV_DispatchThreadID) {
 }
 
 [numthreads(64,1,1)]
-void UpdateParcelsPositionLookupHash(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= powerOfTwoCount) return;
+void P2GInit(uint3 id : SV_DispatchThreadID) {
+    if (id.x < p2gBitonicBufferSize) {
+        p2gCenterData[id.x].mass = 0;
+        p2gCenterData[id.x].parcel = -1;
+        p2gCenterData[id.x].cell = UINT_MAX;
 
-    ParcelsPositionLookup lookup = { UINT_MAX, UINT_MAX, -1 };
-    if (id.x < count) {
-        float2 p = parcelsData[id.x].position;
-        int2 cellPosition = floor(p.xy);
-        uint hash = GetCellHash(cellPosition);
-        lookup.hash = hash;
-        lookup.index = id.x;
+        p2gEdgeDataX[id.x].mass = 0;
+        p2gEdgeDataX[id.x].momentum = 0;
+        p2gEdgeDataX[id.x].parcel = -1;
+        p2gEdgeDataX[id.x].cell = UINT_MAX;
+
+        p2gEdgeDataY[id.x].mass = 0;
+        p2gEdgeDataY[id.x].momentum = 0;
+        p2gEdgeDataY[id.x].parcel = -1;
+        p2gEdgeDataY[id.x].cell = UINT_MAX;
     }
-    parcelsPositionLookup[id.x] = lookup;
+
+    if (id.x < resolution.x * resolution.y) {
+        p2gReductionStart[id.x] = -1;
+        p2gReductionEnd[id.x] = -1;
+    }
 }
 
+[numthreads(64,1,1)]
+void P2GAccumulate(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
 
-uint bitonicMajorStepIndex;
-uint bitonicMinorStepIndex;
+    float2 p = parcelsData[id.x].position;
+    float m = parcelsData[id.x].mass;
+
+    // TODO: Accumulate edge mass and momentum
+    int2 cellPosition = floor(p.xy);
+    int2 offset[] = {
+        int2(0, 0),
+        int2(1, 0),
+        int2(0, 1),
+        int2(1, 1)
+    };
+    float2 dp = p.xy - cellPosition.xy;
+    float weights[] = {
+        (1 - dp.x) * (1 - dp.y),
+        (    dp.x) * (1 - dp.y),
+        (1 - dp.x) * (    dp.y),
+        (    dp.x) * (    dp.y),
+    };
+    for (int i = 0; i < 4; ++i) {
+        uint index = id.x * 4 + i;
+        p2gCenterData[index].parcel = id.x;
+        p2gCenterData[index].cell = GetCellHash(cellPosition.xy + offset[i].xy);
+        p2gCenterData[index].mass = m * weights[i];
+    }
+}
 
 [numthreads(64,1,1)]
-void LookupBitonicSortStep(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= powerOfTwoCount) return;
+void P2GBitonicSortStep(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= p2gBitonicBufferSize) return;
     uint i = id.x;
     uint l = i ^ bitonicMinorStepIndex;
 
+    // TODO: Sort edge mass and momentum
+
     /* The threads with the lowest ids sort the array. */
     if (l > i) {
-        uint hashI = parcelsPositionLookup[i].hash;
-        uint hashL = parcelsPositionLookup[l].hash;
+        uint cellI = p2gCenterData[i].cell;
+        uint cellL = p2gCenterData[l].cell;
 
-        uint indexI = parcelsPositionLookup[i].index;
-        uint indexL = parcelsPositionLookup[l].index;
-
-        if ((i & bitonicMajorStepIndex) == 0 && hashI > hashL) {
+        if ((i & bitonicMajorStepIndex) == 0 && cellI > cellL) {
             /* Sort ascending */
-            parcelsPositionLookup[i].hash = hashL;
-            parcelsPositionLookup[l].hash = hashI;
+            p2gCenterData[i].cell = cellL;
+            p2gCenterData[l].cell = cellI;
 
-            parcelsPositionLookup[i].index = indexL;
-            parcelsPositionLookup[l].index = indexI;
+            SWAP(p2gCenterData[i].mass, p2gCenterData[l].mass, float);
+            SWAP(p2gCenterData[i].parcel, p2gCenterData[l].parcel, int);
         }
-        else if ((i & bitonicMajorStepIndex) != 0 && hashI < hashL) {
+        else if ((i & bitonicMajorStepIndex) != 0 && cellI < cellL) {
             /* Sort descending */
-            parcelsPositionLookup[i].hash = hashL;
-            parcelsPositionLookup[l].hash = hashI;
+            p2gCenterData[i].cell = cellL;
+            p2gCenterData[l].cell = cellI;
 
-            parcelsPositionLookup[i].index = indexL;
-            parcelsPositionLookup[l].index = indexI;
+            SWAP(p2gCenterData[i].mass, p2gCenterData[l].mass, float);
+            SWAP(p2gCenterData[i].parcel, p2gCenterData[l].parcel, int);
         }
     }
 }
 
 [numthreads(64,1,1)]
-void UpdateParcelsPositionLookupStart(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= count) return;
-    uint hash = parcelsPositionLookup[id.x].hash;
+void P2GUpdatePrefixSumIndices(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= p2gBufferSize) return;
+
+    // TODO: Update edge mass and momentum indices
+    uint cell = p2gCenterData[id.x].cell;
     if (id.x == 0) {
-        parcelsPositionLookup[hash].start = 0;
+        p2gReductionStart[cell].z = 0;
     }
-    else {
-        uint previousHash = parcelsPositionLookup[id.x - 1].hash;
-        if (previousHash != hash) {
-            parcelsPositionLookup[hash].start = id.x;
-        }
+    else if (cell != p2gCenterData[id.x - 1].cell) {
+        p2gReductionStart[cell].z = id.x;
     }
-}
 
-[numthreads(8,8,1)]
-void TransferCellCenterMass(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= resolution.x || id.y >= resolution.y) return;
-
-    int2 cellPosition = id.xy;
-    for (int x = cellPosition.x - 1; x <= cellPosition.x + 1; ++x) {
-        for (int y = cellPosition.y - 1; y <= cellPosition.y + 1; ++y) {
-            uint hash = GetCellHash(ClampCoordinates(x, y));
-
-            // Add mass for each Parcel that contributes to the current cell
-            int startIndex = parcelsPositionLookup[hash].start;
-            while (startIndex >= 0 && startIndex < (int)count && parcelsPositionLookup[startIndex].hash == hash) {
-                int parcelIndex = parcelsPositionLookup[startIndex].index;
-                float2 p = parcelsData[parcelIndex].position;
-                float m = parcelsData[parcelIndex].mass;
-
-                // Only Parcels near enough contribute to the cell mass
-                float2 dp = abs(p.xy - (float2)cellPosition.xy);
-                if (dp.x < 1 && dp.y < 1) {
-                    float weight = (1 - dp.x) * (1 - dp.y);
-                    float mass = m * weight;
-                    float3 smoke = smokeMap[cellPosition].xyz + mass;
-                    smokeMap[cellPosition] = float4(smoke, smokeMap[cellPosition].a);
-                }
-                ++startIndex;
-            }
-        }
+    if (id.x == p2gBufferSize - 1) {
+        p2gReductionEnd[cell].z = p2gBufferSize;
+    }
+    else if (cell != p2gCenterData[id.x + 1].cell) {
+        p2gReductionEnd[cell].z = id.x + 1;
     }
 }
 
-void TransferCellEdgeMassAxis(uint2 edgeIndex, uint axis) {
-    int xOffset = (axis == AXIS_X) ? 0 : 1;
-    int yOffset = (axis == AXIS_Y) ? 0 : 1;
 
-    float2 edgePosition = float2(
-        (axis == AXIS_X) ? (float)edgeIndex.x - 0.5 : edgeIndex.x,
-        (axis == AXIS_Y) ? (float)edgeIndex.y - 0.5 : edgeIndex.y
-    );
-    float2 mass = edgeMassMap[edgeIndex].xy;
-    for (int x = (int)edgeIndex.x - 1; x <= (int)edgeIndex.x + xOffset; ++x) {
-        for (int y = (int)edgeIndex.y - 1; y <= (int)edgeIndex.y + yOffset; ++y) {
-            uint2 cellPosition = ClampCoordinates(x, y);
-            uint hash = GetCellHash(cellPosition.xy);
+shared float p2gTotalPrefixSumMass;
 
-            int startIndex = parcelsPositionLookup[hash].start;
-            while (startIndex >= 0 && startIndex < (int)count && parcelsPositionLookup[startIndex].hash == hash) {
-                int parcelIndex = parcelsPositionLookup[startIndex].index;
-                float2 p = parcelsData[parcelIndex].position;
-                float m = parcelsData[parcelIndex].mass;
+[numthreads(64,1,1)]
+void P2GReduceStep(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= p2gBufferSize) return;
 
-                // Only Parcels near enough contribute to the cell mass
-                float2 dp = abs(p.xy - edgePosition.xy);
-                if (dp.x < 1 && dp.y < 1) {
-                    float weight = (1 - dp.x) * (1 - dp.y);
-                    mass.x += (axis == AXIS_X) ? m * weight : 0;
-                    mass.y += (axis == AXIS_Y) ? m * weight : 0;
-                }
-                ++startIndex;
-            }
-        }
+    // TODO: Reduce edge mass and momentum
+    // Calculate prefix sum (https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda)
+    // Up-sweep (reduce)
+    uint offset = p2gPrefixSumStride << 1;
+    if ((id.x % offset) != (offset - 1)) {
+        return;
     }
-    edgeMassMap[edgeIndex] = mass.xy;
+    p2gCenterData[id.x].mass += p2gCenterData[id.x - p2gPrefixSumStride].mass;
+
+    if (p2gIsLastPrefixSumStep && id.x == p2gBufferSize - 1) {
+        p2gTotalPrefixSumMass = p2gCenterData[id.x].mass;
+        p2gCenterData[id.x].mass = 0;
+    }
 }
 
 [numthreads(64,1,1)]
-void TransferCellEdgeMass(uint3 id : SV_DispatchThreadID) {
-    // BUG: Code works only when modifying and reloading shader.
-    // It is probably a compiler aggresive optimization bug but I don't know
-    // what's the cause of it.
-    if (id.x >= resolution.x || id.y >= resolution.y) return;
-    TransferCellEdgeMassAxis(id.xy, AXIS_X);
-    TransferCellEdgeMassAxis(id.xy, AXIS_Y);
-}
+void P2GScanStep(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= p2gBufferSize) return;
 
-void TransferCellEdgeMomentumAxis(uint2 edgeIndex, uint axis) {
-    int xOffset = (axis == AXIS_X) ? 0 : 1;
-    int yOffset = (axis == AXIS_Y) ? 0 : 1;
-    float2 edgePosition = float2(
-        (axis == AXIS_X) ? (float)edgeIndex.x - 0.5 : edgeIndex.x,
-        (axis == AXIS_Y) ? (float)edgeIndex.y - 0.5 : edgeIndex.y
-    );
-
-    float2 momentum = edgeMomentumMap[edgeIndex];
-    for (int x = (int)edgeIndex.x - 1; x <= (int)edgeIndex.x + xOffset; ++x) {
-        for (int y = (int)edgeIndex.y - 1; y <= (int)edgeIndex.y + yOffset; ++y) {
-            uint2 cellPosition = ClampCoordinates(x, y);
-            uint hash = GetCellHash(cellPosition.xy);
-
-            int startIndex = parcelsPositionLookup[hash].start;
-            while (startIndex >= 0 && startIndex < (int)count && parcelsPositionLookup[startIndex].hash == hash) {
-                int parcelIndex = parcelsPositionLookup[startIndex].index;
-                float2 p = parcelsData[parcelIndex].position;
-                float2 v = parcelsData[parcelIndex].velocity;
-                float m = parcelsData[parcelIndex].mass;
-                float2 c = axis == AXIS_X ? parcelsData[parcelIndex].cx : parcelsData[parcelIndex].cy;
-
-                // Only Parcels near enough contribute to the cell mass
-                float2 dp = edgePosition.xy - p.xy;
-                float2 absDp = abs(dp);
-                if (absDp.x < 1 && absDp.y < 1) {
-                    float weight = (1 - absDp.x) * (1 - absDp.y);
-                    momentum.x += (axis == AXIS_X) ? (m * weight * (v.x + dot(c, dp))) : 0;
-                    momentum.y += (axis == AXIS_Y) ? (m * weight * (v.y + dot(c, dp))) : 0;
-                }
-                ++startIndex;
-            }
-        }
+    // TODO: Scan edge mass and momentum
+    // Calculate prefix sum (https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda)
+    // Down-sweep (scan)
+    uint offset = p2gPrefixSumStride << 1;
+    if ((id.x % offset) != (offset - 1)) {
+        return;
     }
-    edgeMomentumMap[edgeIndex] = momentum.xy;
-}
-
-void TransferVelocities(uint2 id) {
-}
-
-[numthreads(8,8,1)]
-void TransferMomentum(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= resolution.x || id.y >= resolution.y) return;
-    TransferCellEdgeMomentumAxis(id.xy, AXIS_X);
-    TransferCellEdgeMomentumAxis(id.xy, AXIS_Y);
-
-    float2 m = edgeMassMap[id.xy];
-    float2 v = velocityMap[id.xy].xy;
-    v.x = (m.x > 1e-6) ? edgeMomentumMap[id.xy].x / m.x : v.x;
-    v.y = (m.y > 1e-6) ? edgeMomentumMap[id.xy].y / m.y : v.y;
-    velocityMap[id.xy] = v;
+    float m = p2gCenterData[id.x - p2gPrefixSumStride].mass;
+    p2gCenterData[id.x - p2gPrefixSumStride].mass = p2gCenterData[id.x].mass;
+    p2gCenterData[id.x].mass += m;
 }
 
 [numthreads(8,8,1)]
-void EnforceSolidBoundaryConditions(uint3 id : SV_DispatchThreadID) {
+void P2GTransferData(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
-    float2 velocity = velocityMap[id.xy];
-    bool isSolid = (GetCellType(id.x, id.y) == CELL_TYPE_SOLID);
 
-    // Horizontal velocity
-    bool isSolidLeft = (GetCellType((int)id.x - 1, id.y) == CELL_TYPE_SOLID);
-    if (isSolidLeft || isSolid)
-        velocity.x = 0;
+    // TODO: Transfer edge mass and momentum
+    uint cell = GetCellHash(id.xy);
+    int start = p2gReductionStart[cell].z;
+    int end = p2gReductionEnd[cell].z;
+    // No Parcels are in this Cell
+    if (start < 0 || end < 0) {
+        return;
+    }
 
-    // Vertical velocity
-    bool isSolidBottom = (GetCellType(id.x, (int)id.y - 1) == CELL_TYPE_SOLID);
-    if (isSolidBottom || isSolid)
-        velocity.y = 0;
-
-    velocityMap[id.xy] = velocity;
+    smokeMap[id.xy] = (
+        ((uint)end >= p2gBufferSize) ? p2gTotalPrefixSumMass : p2gCenterData[end].mass
+    ) - p2gCenterData[start].mass;
 }
 
 [numthreads(8,8,1)]

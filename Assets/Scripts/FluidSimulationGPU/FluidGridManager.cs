@@ -10,13 +10,15 @@ public class FluidGridManager {
         Init,
         ClearSmoke,
         ClearMomentum,
-        UpdateParcelsPositionLookupHash,
-        LookupBitonicSortStep,
-        UpdateParcelsPositionLookupStart,
-        TransferCellCenterMass,
-        TransferCellEdgeMass,
-        TransferMomentum,
-        EnforceSolidBoundaryConditions,
+
+        P2GInit,
+        P2GAccumulate,
+        P2GBitonicSortStep,
+        P2GUpdatePrefixSumIndices,
+        P2GReduceStep,
+        P2GScanStep,
+        P2GTransferData,
+
         AdvectVelocities,
         VelocityAdvectionReadback,
         AdvectSmoke,
@@ -51,10 +53,17 @@ public class FluidGridManager {
         public float velocityTerm;
     }
 
-    public struct ParcelsPositionLookup {
-        public uint hash;
-        public uint index;
-        public int start;
+    public struct P2GCenterData {
+        public float mass;
+        public int parcel;
+        public int cell;
+    }
+
+    public struct P2GEdgeData {
+        public float mass;
+        public float momentum;
+        public int parcel;
+        public int cell;
     }
 
     ComputeShader compute;
@@ -94,7 +103,12 @@ public class FluidGridManager {
     public ComputeBuffer obstacleVertices;
     public ComputeBuffer obstacleTriangles;
 
-    public ComputeBuffer parcelsPositionLookup;
+    public ComputeBuffer p2gCenterData;
+    public ComputeBuffer p2gEdgeDataX;
+    public ComputeBuffer p2gEdgeDataY;
+
+    public ComputeBuffer p2gReductionStart;
+    public ComputeBuffer p2gReductionEnd;
 
     public FluidGridManager(int width, int height, ComputeShader compute, FluidParcelsManager parcels) {
         resolution = new(width, height);
@@ -113,6 +127,8 @@ public class FluidGridManager {
     }
 
     void CreateTextures(FluidParcelsManager parcels) {
+        int area = resolution.x * resolution.y;
+
         ComputeHelper.CreateRenderTexture(ref debugMap, resolution.x, resolution.y, FilterMode.Point,
                                           GraphicsFormat.R32G32B32A32_SFloat);
         // BUG: Cell type render texture format uses float because integers do not
@@ -125,7 +141,7 @@ public class FluidGridManager {
                                           GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref pressureMap, resolution.x, resolution.y, FilterMode.Bilinear,
                                           GraphicsFormat.R32_SFloat);
-        ComputeHelper.CreateStructuredBuffer<PressureSolverData>(ref pressureSolverData, resolution.x * resolution.y);
+        ComputeHelper.CreateStructuredBuffer<PressureSolverData>(ref pressureSolverData, area);
         ComputeHelper.CreateRenderTexture(ref smokeMap, resolution.x, resolution.y, FilterMode.Bilinear,
                                           GraphicsFormat.R32G32B32A32_SFloat);
         ComputeHelper.CreateRenderTexture(ref smokeMapAdvected, resolution.x, resolution.y, FilterMode.Bilinear,
@@ -134,8 +150,15 @@ public class FluidGridManager {
                                           GraphicsFormat.R32G32_SFloat);
         ComputeHelper.CreateRenderTexture(ref edgeMomentumMap, resolution.x, resolution.y, FilterMode.Point,
                                           GraphicsFormat.R32G32_SFloat);
-        int bufferSize = Mathf.Max(Mathf.NextPowerOfTwo(parcels.Count), resolution.x * resolution.y * 2);
-        ComputeHelper.CreateStructuredBuffer<ParcelsPositionLookup>(ref parcelsPositionLookup, bufferSize);
+
+        int bufferSize = Mathf.NextPowerOfTwo(parcels.Count * 4);
+        ComputeHelper.CreateStructuredBuffer<P2GCenterData>(ref p2gCenterData, bufferSize);
+        ComputeHelper.CreateStructuredBuffer<P2GEdgeData>(ref p2gEdgeDataX, bufferSize);
+        ComputeHelper.CreateStructuredBuffer<P2GEdgeData>(ref p2gEdgeDataY, bufferSize);
+
+        int reductionArea = (resolution.x + 4) * (resolution.y + 4);
+        ComputeHelper.CreateStructuredBuffer<Vector3Int>(ref p2gReductionStart, reductionArea);
+        ComputeHelper.CreateStructuredBuffer<Vector3Int>(ref p2gReductionEnd, reductionArea);
     }
 
     void BindTextures() {
@@ -151,7 +174,13 @@ public class FluidGridManager {
         ComputeHelper.SetTexture(compute, smokeMapAdvected, "smokeMapAdvected", computeKernels);
         ComputeHelper.SetTexture(compute, edgeMassMap, "edgeMassMap", computeKernels);
         ComputeHelper.SetTexture(compute, edgeMomentumMap, "edgeMomentumMap", computeKernels);
-        ComputeHelper.SetBuffer(compute, parcelsPositionLookup, "parcelsPositionLookup", computeKernels);
+
+        ComputeHelper.SetBuffer(compute, p2gCenterData, "p2gCenterData", computeKernels);
+        ComputeHelper.SetBuffer(compute, p2gEdgeDataX, "p2gEdgeDataX", computeKernels);
+        ComputeHelper.SetBuffer(compute, p2gEdgeDataY, "p2gEdgeDataY", computeKernels);
+
+        ComputeHelper.SetBuffer(compute, p2gReductionStart, "p2gReductionStart", computeKernels);
+        ComputeHelper.SetBuffer(compute, p2gReductionEnd, "p2gReductionEnd", computeKernels);
     }
 
     void BindSettings(FluidParcelsManager parcels) {
@@ -160,22 +189,35 @@ public class FluidGridManager {
         compute.SetFloat("ambientTemperature", ambientTemperature);
     }
 
-    void UpdateParcelsPositionLookup(FluidParcelsManager parcels) {
-        int powerOfTwoCount = Mathf.NextPowerOfTwo(parcels.Count);
-        compute.SetInt("powerOfTwoCount", powerOfTwoCount);
-
-        ComputeHelper.Dispatch(compute, powerOfTwoCount, 1, ComputeKernel.UpdateParcelsPositionLookupHash);
-
-        // Sort lookup hashes
-        for (int k = 2; k <= powerOfTwoCount; k <<= 1) {
+    void BitonicSort(int bufferSize) {
+        for (int k = 2; k <= bufferSize; k <<= 1) {
             for (int j = k >> 1; j > 0; j >>= 1) {
                 compute.SetInt("bitonicMajorStepIndex", k);
                 compute.SetInt("bitonicMinorStepIndex", j);
-                ComputeHelper.Dispatch(compute, powerOfTwoCount, 1, ComputeKernel.LookupBitonicSortStep);
+                ComputeHelper.Dispatch(compute, bufferSize, 1, ComputeKernel.P2GBitonicSortStep);
             }
         }
+    }
 
-        ComputeHelper.Dispatch(compute, parcels.Count, 1, ComputeKernel.UpdateParcelsPositionLookupStart);
+    void PrefixSum(int bufferSize) {
+        ComputeHelper.Dispatch(compute, bufferSize, 1, ComputeKernel.P2GUpdatePrefixSumIndices);
+
+        for (int stride = 1; stride < bufferSize; stride <<= 1) {
+            compute.SetInt("p2gPrefixSumStride", stride);
+            compute.SetBool("p2gIsLastPrefixSumStep", stride >= bufferSize);
+            ComputeHelper.Dispatch(compute, bufferSize, 1, ComputeKernel.P2GReduceStep);
+        }
+        for (int i = bufferSize; i > 0; i >>= 1) {
+            int stride = i >> 1;
+            compute.SetInt("p2gPrefixSumStride", stride);
+            compute.SetBool("p2gIsLastPrefixSumStep", stride == 0);
+            ComputeHelper.Dispatch(compute, bufferSize, 1, ComputeKernel.P2GScanStep);
+        }
+    }
+
+    void ClearGridData() {
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.ClearSmoke);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.ClearMomentum);
     }
 
     /// <summary>
@@ -183,20 +225,28 @@ public class FluidGridManager {
     /// </summary>
     /// <param name="parcels">Parcels object to transfer the data from</param>
     /// <param name="dt">Time difference between two simulation steps in seconds</param>
-    public void TransferParcelsData(FluidParcelsManager parcels, float dt) {
+    public void TransferParcelsData(FluidParcelsManager parcelsManager, float dt) {
+        int bufferSize = parcelsManager.Count * 4;
+        int bitonicBufferSize = Mathf.NextPowerOfTwo(bufferSize);
+        int reductionArea = (resolution.x + 4) * (resolution.y + 4);
+
+        compute.SetInt("p2gBufferSize", bufferSize);
+        compute.SetInt("p2gBitonicBufferSize", bitonicBufferSize);
         compute.SetFloat("dt", dt);
-        ComputeHelper.SetBuffer(compute, parcels.parcelsData, "parcelsData", computeKernels);
+        ComputeHelper.SetBuffer(compute, parcelsManager.parcelsData, "parcelsData", computeKernels);
 
-        UpdateParcelsPositionLookup(parcels);
+        ClearGridData();
+        ComputeHelper.Dispatch(compute, Mathf.Max(bitonicBufferSize, reductionArea), 1, ComputeKernel.P2GInit);
 
-        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.ClearSmoke);
-        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.ClearMomentum);
+        ComputeHelper.Dispatch(compute, parcelsManager.Count, 1, ComputeKernel.P2GAccumulate);
+        BitonicSort(bitonicBufferSize);
+        PrefixSum(bufferSize);
 
-        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.TransferCellCenterMass);
-        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.TransferCellEdgeMass);
-        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.TransferMomentum);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.P2GTransferData);
 
-        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.EnforceSolidBoundaryConditions);
+        // ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.TransferCellEdgeMass);
+        // ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.TransferMomentum);
+        // ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.EnforceSolidBoundaryConditions);
     }
 
     /// <summary>
@@ -385,8 +435,8 @@ public class FluidGridManager {
     }
 
     public void ReleaseTextures() {
-        ComputeHelper.Release(pressureSolverData, obstacleIndices, obstacleVertices, obstacleTriangles,
-                              parcelsPositionLookup);
+        ComputeHelper.Release(pressureSolverData, obstacleIndices, obstacleVertices, obstacleTriangles, p2gCenterData,
+                              p2gEdgeDataX, p2gEdgeDataY, p2gReductionStart, p2gReductionEnd);
         ComputeHelper.Release(debugMap, cellType, velocityMap, velocityMapAdvected, pressureMap, smokeMap,
                               smokeMapAdvected, edgeMassMap, edgeMomentumMap);
     }

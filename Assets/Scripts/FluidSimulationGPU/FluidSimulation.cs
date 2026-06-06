@@ -171,7 +171,7 @@ public class FluidSimulation {
 
         parcelsManager.TransferGridData(gridManager);
         parcelsManager.UpdateAffineState(gridManager);
-        parcelsManager.Advect(gridManager, timeStep);
+        // parcelsManager.Advect(gridManager, timeStep);
 
         gridManager.TransferParcelsData(parcelsManager, timeStep);
 
