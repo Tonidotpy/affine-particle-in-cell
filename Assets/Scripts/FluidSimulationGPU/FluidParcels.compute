@@ -61,8 +61,8 @@ void Init(uint3 id : SV_DispatchThreadID) {
 
     // TODO: Remove
     parcelsData[id.x].mass = 1;
-    parcelsData[id.x].position = float2(cos(id.x), sin(id.x)) * 5 + 8;
-    // parcelsData[id.x].position = id.xx + float2(0.25, 0.5);
+    // parcelsData[id.x].position = float2(cos(id.x), sin(id.x)) * 5 + 8;
+    parcelsData[id.x].position = id.xx;
 }
 
 [numthreads(64,1,1)]

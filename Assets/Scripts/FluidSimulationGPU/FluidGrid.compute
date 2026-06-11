@@ -75,7 +75,6 @@ struct ParcelsData {
 
 struct P2GCenterData {
     float mass;
-    int parcel;
     uint cell;
 };
 
@@ -154,7 +153,7 @@ uint p2gPrefixSumStride;
 bool p2gIsLastPrefixSumStep;
 
 const uint p2gBufferSize;
-const uint p2gBitonicBufferSize;
+const uint p2gPowerOfTwoBufferSize;
 RWStructuredBuffer<P2GCenterData> p2gCenterData;
 RWStructuredBuffer<P2GEdgeData> p2gEdgeDataX;
 RWStructuredBuffer<P2GEdgeData> p2gEdgeDataY;
@@ -290,9 +289,8 @@ void ClearMomentum(uint3 id : SV_DispatchThreadID) {
 
 [numthreads(64,1,1)]
 void P2GInit(uint3 id : SV_DispatchThreadID) {
-    if (id.x < p2gBitonicBufferSize) {
+    if (id.x < p2gPowerOfTwoBufferSize) {
         p2gCenterData[id.x].mass = 0;
-        p2gCenterData[id.x].parcel = -1;
         p2gCenterData[id.x].cell = UINT_MAX;
 
         p2gEdgeDataX[id.x].mass = 0;
@@ -306,20 +304,13 @@ void P2GInit(uint3 id : SV_DispatchThreadID) {
         p2gEdgeDataY[id.x].cell = UINT_MAX;
     }
 
-    if (id.x < resolution.x * resolution.y) {
+    if (id.x < (resolution.x + 4) * (resolution.y + 4)) {
         p2gReductionStart[id.x] = -1;
         p2gReductionEnd[id.x] = -1;
     }
 }
 
-[numthreads(64,1,1)]
-void P2GAccumulate(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= count) return;
-
-    float2 p = parcelsData[id.x].position;
-    float m = parcelsData[id.x].mass;
-
-    // TODO: Accumulate edge mass and momentum
+void P2GAccumulateCellCenterMass(uint2 id, float2 p, float m) {
     int2 cellPosition = floor(p.xy);
     int2 offset[] = {
         int2(0, 0),
@@ -336,71 +327,192 @@ void P2GAccumulate(uint3 id : SV_DispatchThreadID) {
     };
     for (int i = 0; i < 4; ++i) {
         uint index = id.x * 4 + i;
-        p2gCenterData[index].parcel = id.x;
         p2gCenterData[index].cell = GetCellHash(cellPosition.xy + offset[i].xy);
         p2gCenterData[index].mass = m * weights[i];
+
+        // uint2 j = uint2(index % resolution.x, index / resolution.x);
+        // debugMap[j] = float4(p2gCenterData[index].cell / (float)((resolution.x + 4) * (resolution.y + 4)), 0, 0, 1);
+        // debugMap[j] = float4(p2gCenterData[index].mass, 0, 0, 1);
+    }
+}
+
+void P2GAccumulateCellEdgeMass(uint2 id, float2 p, float m) {
+    int2 cellPosition = floor(p.xy);
+    int2 offset[] = {
+        int2(0, 0),
+        int2(1, 0),
+        int2(0, 1),
+        int2(1, 1)
+    };
+
+    // Horizontal axis
+    {
+        int2 edgePosition = floor(p.xy + float2(0.5, 0));
+        float2 dp = p.xy - edgePosition.xy;
+        float weights[] = {
+            (1 - dp.x) * (1 - dp.y),
+            (    dp.x) * (1 - dp.y),
+            (1 - dp.x) * (    dp.y),
+            (    dp.x) * (    dp.y),
+        };
+        for (int i = 0; i < 4; ++i) {
+            uint index = id.x * 4 + i;
+            p2gEdgeDataX[index].cell = GetCellHash(cellPosition.xy + offset[i].xy);
+            p2gEdgeDataX[index].mass = m * weights[i];
+        }
+    }
+    // Vertical axis
+    {
+        int2 edgePosition = floor(p.xy + float2(0, 0.5));
+        float2 dp = p.xy - edgePosition.xy;
+        float weights[] = {
+            (1 - dp.x) * (1 - dp.y),
+            (    dp.x) * (1 - dp.y),
+            (1 - dp.x) * (    dp.y),
+            (    dp.x) * (    dp.y),
+        };
+        for (int i = 0; i < 4; ++i) {
+            uint index = id.x * 4 + i;
+            p2gEdgeDataY[index].cell = GetCellHash(cellPosition.xy + offset[i].xy);
+            p2gEdgeDataY[index].mass = m * weights[i];
+        }
     }
 }
 
 [numthreads(64,1,1)]
+void P2GAccumulate(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+
+    float2 p = parcelsData[id.x].position;
+    float m = parcelsData[id.x].mass;
+
+    // 1. Accumulate Cell center mass
+    P2GAccumulateCellCenterMass(id.xy, p, m);
+
+    // 2. Accumulate Cell edge mass
+    P2GAccumulateCellEdgeMass(id.xy, p, m);
+    // TODO: Accumulate momentum
+}
+
+[numthreads(64,1,1)]
 void P2GBitonicSortStep(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= p2gBitonicBufferSize) return;
+    if (id.x >= p2gPowerOfTwoBufferSize) return;
     uint i = id.x;
     uint l = i ^ bitonicMinorStepIndex;
 
-    // TODO: Sort edge mass and momentum
-
     /* The threads with the lowest ids sort the array. */
     if (l > i) {
-        uint cellI = p2gCenterData[i].cell;
-        uint cellL = p2gCenterData[l].cell;
+        uint2 centerCell = uint2(p2gCenterData[i].cell, p2gCenterData[l].cell);
+        uint2 edgeCellX = uint2(p2gEdgeDataX[i].cell, p2gEdgeDataX[l].cell);
+        uint2 edgeCellY = uint2(p2gEdgeDataY[i].cell, p2gEdgeDataY[l].cell);
 
-        if ((i & bitonicMajorStepIndex) == 0 && cellI > cellL) {
+        if ((i & bitonicMajorStepIndex) == 0) {
             /* Sort ascending */
-            p2gCenterData[i].cell = cellL;
-            p2gCenterData[l].cell = cellI;
+            if (centerCell.x > centerCell.y) {
+                p2gCenterData[i].cell = centerCell.y;
+                p2gCenterData[l].cell = centerCell.x;
 
-            SWAP(p2gCenterData[i].mass, p2gCenterData[l].mass, float);
-            SWAP(p2gCenterData[i].parcel, p2gCenterData[l].parcel, int);
+                SWAP(p2gCenterData[i].mass, p2gCenterData[l].mass, float);
+            }
+            if (edgeCellX.x > edgeCellX.y) {
+                p2gEdgeDataX[i].cell = edgeCellX.y;
+                p2gEdgeDataX[l].cell = edgeCellX.x;
+
+                SWAP(p2gEdgeDataX[i].mass, p2gEdgeDataX[l].mass, float);
+            }
+            if (edgeCellY.x > edgeCellY.y) {
+                p2gEdgeDataY[i].cell = edgeCellY.y;
+                p2gEdgeDataY[l].cell = edgeCellY.x;
+
+                SWAP(p2gEdgeDataY[i].mass, p2gEdgeDataY[l].mass, float);
+            }
         }
-        else if ((i & bitonicMajorStepIndex) != 0 && cellI < cellL) {
+        else if ((i & bitonicMajorStepIndex) != 0) {
             /* Sort descending */
-            p2gCenterData[i].cell = cellL;
-            p2gCenterData[l].cell = cellI;
+            if (centerCell.x < centerCell.y) {
+                p2gCenterData[i].cell = centerCell.y;
+                p2gCenterData[l].cell = centerCell.x;
 
-            SWAP(p2gCenterData[i].mass, p2gCenterData[l].mass, float);
-            SWAP(p2gCenterData[i].parcel, p2gCenterData[l].parcel, int);
+                SWAP(p2gCenterData[i].mass, p2gCenterData[l].mass, float);
+            }
+            if (edgeCellX.x < edgeCellX.y) {
+                p2gEdgeDataX[i].cell = edgeCellX.y;
+                p2gEdgeDataX[l].cell = edgeCellX.x;
+
+                SWAP(p2gEdgeDataX[i].mass, p2gEdgeDataX[l].mass, float);
+            }
+            if (edgeCellY.x < edgeCellY.y) {
+                p2gEdgeDataY[i].cell = edgeCellY.y;
+                p2gEdgeDataY[l].cell = edgeCellY.x;
+
+                SWAP(p2gEdgeDataY[i].mass, p2gEdgeDataY[l].mass, float);
+            }
         }
     }
+
+    // TODO: Sort momentum
+    // if (id.x < p2gBufferSize) {
+    //     uint2 j = uint2(id.x % resolution.x, id.x / resolution.x);
+    //     // debugMap[j] = float4(p2gCenterData[id.x].cell / (float)((resolution.x + 4) * (resolution.y + 4)), 0, 0, 1);
+    //     debugMap[j] = float4(p2gCenterData[id.x].mass, 0, 0, 1);
+    // }
 }
 
 [numthreads(64,1,1)]
 void P2GUpdatePrefixSumIndices(uint3 id : SV_DispatchThreadID) {
     if (id.x >= p2gBufferSize) return;
 
-    // TODO: Update edge mass and momentum indices
-    uint cell = p2gCenterData[id.x].cell;
+    uint3 prevCell = uint3(
+        p2gEdgeDataX[id.x - 1].cell,
+        p2gEdgeDataY[id.x - 1].cell,
+        p2gCenterData[id.x - 1].cell
+    );
+    uint3 nextCell = uint3(
+        p2gEdgeDataX[id.x + 1].cell,
+        p2gEdgeDataY[id.x + 1].cell,
+        p2gCenterData[id.x + 1].cell
+    );
+    uint3 cell = uint3(
+        p2gEdgeDataX[id.x].cell,
+        p2gEdgeDataY[id.x].cell,
+        p2gCenterData[id.x].cell
+    );
+
     if (id.x == 0) {
-        p2gReductionStart[cell].z = 0;
+        p2gReductionStart[cell.x].x = 0;
+        p2gReductionStart[cell.y].y = 0;
+        p2gReductionStart[cell.z].z = 0;
     }
-    else if (cell != p2gCenterData[id.x - 1].cell) {
-        p2gReductionStart[cell].z = id.x;
+    else {
+        if (cell.x != prevCell.x) p2gReductionStart[cell.x].x = id.x;
+        if (cell.y != prevCell.y) p2gReductionStart[cell.y].y = id.x;
+        if (cell.z != prevCell.z) p2gReductionStart[cell.z].z = id.x;
     }
 
     if (id.x == p2gBufferSize - 1) {
-        p2gReductionEnd[cell].z = p2gBufferSize;
+        p2gReductionEnd[cell.x].x = p2gBufferSize;
+        p2gReductionEnd[cell.y].y = p2gBufferSize;
+        p2gReductionEnd[cell.z].z = p2gBufferSize;
     }
-    else if (cell != p2gCenterData[id.x + 1].cell) {
-        p2gReductionEnd[cell].z = id.x + 1;
+    else {
+        if (cell.x != nextCell.x) p2gReductionEnd[cell.x].x = id.x + 1;
+        if (cell.y != nextCell.y) p2gReductionEnd[cell.y].y = id.x + 1;
+        if (cell.z != nextCell.z) p2gReductionEnd[cell.z].z = id.x + 1;
     }
+
+    // uint2 j = uint2(cell % (resolution.x + 4), cell / (resolution.x + 4)) - 2;
+    // debugMap[j] = float4(p2gReductionStart[cell].z / (float)p2gBufferSize, p2gReductionEnd[cell].z / (float)p2gBufferSize, 0, 1);
+
+    // uint2 j = uint2(id.x % resolution.x, id.x / resolution.x);
+    // debugMap[j] = float4(p2gCenterData[id.x].mass, 0, 0, 1);
 }
-
-
-shared float p2gTotalPrefixSumMass;
 
 [numthreads(64,1,1)]
 void P2GReduceStep(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= p2gBufferSize) return;
+    if (id.x >= p2gPowerOfTwoBufferSize) return;
+
+    // uint2 j = uint2(id.x % resolution.x, id.x / resolution.x);
+    // debugMap[j] = float4(p2gCenterData[id.x].mass, p2gCenterData[id.x].mass > 1, 0, 1);
 
     // TODO: Reduce edge mass and momentum
     // Calculate prefix sum (https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda)
@@ -410,16 +522,25 @@ void P2GReduceStep(uint3 id : SV_DispatchThreadID) {
         return;
     }
     p2gCenterData[id.x].mass += p2gCenterData[id.x - p2gPrefixSumStride].mass;
+    p2gEdgeDataX[id.x].mass += p2gEdgeDataX[id.x - p2gPrefixSumStride].mass;
+    p2gEdgeDataY[id.x].mass += p2gEdgeDataY[id.x - p2gPrefixSumStride].mass;
 
-    if (p2gIsLastPrefixSumStep && id.x == p2gBufferSize - 1) {
-        p2gTotalPrefixSumMass = p2gCenterData[id.x].mass;
+    // uint2 j = uint2(id.x % resolution.x, id.x / resolution.x);
+    // debugMap[j] = float4(p2gCenterData[id.x].mass, 0, 0, 1);
+
+    if (p2gIsLastPrefixSumStep && id.x == p2gPowerOfTwoBufferSize - 1) {
+        p2gCenterData[p2gPowerOfTwoBufferSize].mass = p2gCenterData[id.x].mass;
         p2gCenterData[id.x].mass = 0;
+        p2gEdgeDataX[p2gPowerOfTwoBufferSize].mass = p2gEdgeDataX[id.x].mass;
+        p2gEdgeDataX[id.x].mass = 0;
+        p2gEdgeDataY[p2gPowerOfTwoBufferSize].mass = p2gEdgeDataY[id.x].mass;
+        p2gEdgeDataY[id.x].mass = 0;
     }
 }
 
 [numthreads(64,1,1)]
 void P2GScanStep(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= p2gBufferSize) return;
+    if (id.x >= p2gPowerOfTwoBufferSize) return;
 
     // TODO: Scan edge mass and momentum
     // Calculate prefix sum (https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda)
@@ -431,24 +552,46 @@ void P2GScanStep(uint3 id : SV_DispatchThreadID) {
     float m = p2gCenterData[id.x - p2gPrefixSumStride].mass;
     p2gCenterData[id.x - p2gPrefixSumStride].mass = p2gCenterData[id.x].mass;
     p2gCenterData[id.x].mass += m;
+
+    m = p2gEdgeDataX[id.x - p2gPrefixSumStride].mass;
+    p2gEdgeDataX[id.x - p2gPrefixSumStride].mass = p2gEdgeDataX[id.x].mass;
+    p2gEdgeDataX[id.x].mass += m;
+
+    m = p2gEdgeDataY[id.x - p2gPrefixSumStride].mass;
+    p2gEdgeDataY[id.x - p2gPrefixSumStride].mass = p2gEdgeDataY[id.x].mass;
+    p2gEdgeDataY[id.x].mass += m;
+
+    // uint2 j = uint2(id.x % resolution.x, id.x / resolution.x);
+    // debugMap[j] = float4(p2gCenterData[id.x].mass / 3.0, 0, 0, 1);
+    // debugMap[j - uint2(1, 0)] = float4(p2gCenterData[id.x - 1].mass / 3.0, 0, 0, 1);
 }
 
 [numthreads(8,8,1)]
 void P2GTransferData(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 
-    // TODO: Transfer edge mass and momentum
+    // TODO: Transfer momentum
     uint cell = GetCellHash(id.xy);
-    int start = p2gReductionStart[cell].z;
-    int end = p2gReductionEnd[cell].z;
-    // No Parcels are in this Cell
-    if (start < 0 || end < 0) {
-        return;
+    int3 start = p2gReductionStart[cell];
+    int3 end = p2gReductionEnd[cell];
+
+    // NOTE: Writing on a single component of edgeMassMap may cause race conditions
+    // except in this case since the same memory location is written sequentially by
+    // the same thread
+    if (start.x >= 0 && end.x >= 0 && end.x <= (int)p2gBufferSize) {
+        float m = p2gEdgeDataX[end.x].mass - p2gEdgeDataX[start.x].mass;
+        edgeMassMap[id.xy] = float2(m, edgeMassMap[id.xy].y);
+    }
+    if (start.y >= 0 && end.y >= 0 && end.y <= (int)p2gBufferSize) {
+        float m = p2gEdgeDataY[end.y].mass - p2gEdgeDataY[start.y].mass;
+        edgeMassMap[id.xy] = float2(edgeMassMap[id.xy].x, m);
+    }
+    if (start.z >= 0 && end.z >= 0 && end.z <= (int)p2gBufferSize) {
+        float m = p2gCenterData[end.z].mass - p2gCenterData[start.z].mass;
+        smokeMap[id.xy] = float4(m, m, m, smokeMap[id.xy].a);
     }
 
-    smokeMap[id.xy] = (
-        ((uint)end >= p2gBufferSize) ? p2gTotalPrefixSumMass : p2gCenterData[end].mass
-    ) - p2gCenterData[start].mass;
+    // debugMap[id.xy] = float4(smokeMap[id.xy].xyz, 1);
 }
 
 [numthreads(8,8,1)]

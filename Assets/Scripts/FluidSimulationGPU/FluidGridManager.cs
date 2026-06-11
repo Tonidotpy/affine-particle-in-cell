@@ -151,7 +151,7 @@ public class FluidGridManager {
         ComputeHelper.CreateRenderTexture(ref edgeMomentumMap, resolution.x, resolution.y, FilterMode.Point,
                                           GraphicsFormat.R32G32_SFloat);
 
-        int bufferSize = Mathf.NextPowerOfTwo(parcels.Count * 4);
+        int bufferSize = Mathf.NextPowerOfTwo(parcels.Count * 4) + 1;
         ComputeHelper.CreateStructuredBuffer<P2GCenterData>(ref p2gCenterData, bufferSize);
         ComputeHelper.CreateStructuredBuffer<P2GEdgeData>(ref p2gEdgeDataX, bufferSize);
         ComputeHelper.CreateStructuredBuffer<P2GEdgeData>(ref p2gEdgeDataY, bufferSize);
@@ -199,19 +199,17 @@ public class FluidGridManager {
         }
     }
 
-    void PrefixSum(int bufferSize) {
+    void PrefixSum(int bufferSize, int powerOfTwoBufferSize) {
         ComputeHelper.Dispatch(compute, bufferSize, 1, ComputeKernel.P2GUpdatePrefixSumIndices);
 
-        for (int stride = 1; stride < bufferSize; stride <<= 1) {
+        for (int stride = 1; stride < powerOfTwoBufferSize; stride <<= 1) {
             compute.SetInt("p2gPrefixSumStride", stride);
-            compute.SetBool("p2gIsLastPrefixSumStep", stride >= bufferSize);
-            ComputeHelper.Dispatch(compute, bufferSize, 1, ComputeKernel.P2GReduceStep);
+            compute.SetBool("p2gIsLastPrefixSumStep", (stride << 1) >= powerOfTwoBufferSize);
+            ComputeHelper.Dispatch(compute, powerOfTwoBufferSize, 1, ComputeKernel.P2GReduceStep);
         }
-        for (int i = bufferSize; i > 0; i >>= 1) {
-            int stride = i >> 1;
+        for (int stride = powerOfTwoBufferSize >> 1; stride > 0; stride >>= 1) {
             compute.SetInt("p2gPrefixSumStride", stride);
-            compute.SetBool("p2gIsLastPrefixSumStep", stride == 0);
-            ComputeHelper.Dispatch(compute, bufferSize, 1, ComputeKernel.P2GScanStep);
+            ComputeHelper.Dispatch(compute, powerOfTwoBufferSize, 1, ComputeKernel.P2GScanStep);
         }
     }
 
@@ -227,20 +225,21 @@ public class FluidGridManager {
     /// <param name="dt">Time difference between two simulation steps in seconds</param>
     public void TransferParcelsData(FluidParcelsManager parcelsManager, float dt) {
         int bufferSize = parcelsManager.Count * 4;
-        int bitonicBufferSize = Mathf.NextPowerOfTwo(bufferSize);
+        int powerOfTwoBufferSize = Mathf.NextPowerOfTwo(bufferSize);
         int reductionArea = (resolution.x + 4) * (resolution.y + 4);
 
+        compute.SetInt("count", parcelsManager.Count);
         compute.SetInt("p2gBufferSize", bufferSize);
-        compute.SetInt("p2gBitonicBufferSize", bitonicBufferSize);
+        compute.SetInt("p2gPowerOfTwoBufferSize", powerOfTwoBufferSize);
         compute.SetFloat("dt", dt);
         ComputeHelper.SetBuffer(compute, parcelsManager.parcelsData, "parcelsData", computeKernels);
 
         ClearGridData();
-        ComputeHelper.Dispatch(compute, Mathf.Max(bitonicBufferSize, reductionArea), 1, ComputeKernel.P2GInit);
+        ComputeHelper.Dispatch(compute, Mathf.Max(powerOfTwoBufferSize, reductionArea), 1, ComputeKernel.P2GInit);
 
         ComputeHelper.Dispatch(compute, parcelsManager.Count, 1, ComputeKernel.P2GAccumulate);
-        BitonicSort(bitonicBufferSize);
-        PrefixSum(bufferSize);
+        BitonicSort(powerOfTwoBufferSize);
+        PrefixSum(bufferSize, powerOfTwoBufferSize);
 
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.P2GTransferData);
 
