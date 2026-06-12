@@ -358,14 +358,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.Test
   gridCompute: {fileID: 7200000, guid: 8e2415becaf70d38db1062178773686c, type: 3}
-  resolution: {x: 16, y: 16}
+  resolution: {x: 256, y: 256}
   fluidDensity: 1.3
   closeLeftEdge: 0
   closeBottomEdge: 0
   closeRightEdge: 0
   closeTopEdge: 0
   parcelsCompute: {fileID: 7200000, guid: d213d7f56582a7c31b6b0a9ef942abef, type: 3}
-  count: 3
+  count: 5000
   solverIterations: 30
   sor: 1.7
   timeStepMultiplier: 1
@@ -409,8 +409,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.FluidRendererManager
   shader: {fileID: 4800000, guid: df9b484deacb6ce4f9279669e9b2708a, type: 3}
-  visualizationMode: 0
-  inputRadius: 2
+  visualizationMode: 6
+  inputRadius: 20
   inputColor: {r: 1, g: 1, b: 1, a: 0.3}
   inputActiveColor: {r: 0, g: 1, b: 0.1, a: 0.3}
   obstacleColor: {r: 1, g: 1, b: 1, a: 1}
