@@ -47,6 +47,7 @@ public class FluidParcelsManager {
 
     void BindBuffers(FluidGridManager gridManager) {
         ComputeHelper.SetBuffer(compute, parcelsData, "parcelsData", computeKernels);
+        ComputeHelper.SetTexture(compute, gridManager.cellType, "cellType", computeKernels);
         ComputeHelper.SetTexture(compute, gridManager.velocityMap, "velocityMap", computeKernels);
         ComputeHelper.SetTexture(compute, gridManager.velocityMap, "velocityMapSample", computeKernels);
     }

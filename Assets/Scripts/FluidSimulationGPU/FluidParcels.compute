@@ -24,6 +24,7 @@ const uint2 gridResolution;
 
 // --- Buffers --- //
 RWStructuredBuffer<ParcelsData> parcelsData;
+Texture2D<float4> cellType; // x: Cell Type, y: Obstacle Index (-1 if no obstacle), z: Pre-Calculated Edges, w: unused
 Texture2D<float2> velocityMap;
 
 // --- Samplers --- //
@@ -37,6 +38,12 @@ uint2 ClampCoordinates(int i, int j) {
 
 bool IsInCellCenterBounds(int i, int j) {
     return i >= 0 && i < (int)gridResolution.x && j >= 0 && j < (int)gridResolution.y;
+}
+
+uint GetCellType(int i, int j) {
+    // Cell type outside of boundaries it's assumed to be the same as the one
+    // on the edges
+    return cellType[ClampCoordinates(i, j)].x;
 }
 
 float2 SampleVelocity(float2 position) {
@@ -61,7 +68,7 @@ void Init(uint3 id : SV_DispatchThreadID) {
 
     // TODO: Remove
     parcelsData[id.x].mass = 1;
-    parcelsData[id.x].position = float2(cos(id.x), sin(id.x)) * 50 + 128;
+    parcelsData[id.x].position = float2(cos(id.x), sin(id.x)) * 30 + 50;
     // parcelsData[id.x].position = id.xx;
 }
 
@@ -192,7 +199,39 @@ void Advect(uint3 id : SV_DispatchThreadID) {
     float2 positionNext = p + dp;
     int2 cellPosition = floor(positionNext + 0.5);
 
-    // TODO: Handle Solid obstacles
+    if (GetCellType(cellPosition.x, cellPosition.y) == CELL_TYPE_SOLID) {
+        int2 cellHorizontalNext = int2(cellPosition.x, floor(cellPosition.y + 0.5));
+        int2 cellVerticalNext = int2(floor(cellPosition.x + 0.5), cellPosition.y);
 
+        bool isHorizontalSolid = GetCellType(cellHorizontalNext.x, cellHorizontalNext.y) == CELL_TYPE_SOLID;
+        bool isVerticalSolid = GetCellType(cellVerticalNext.x, cellVerticalNext.y) == CELL_TYPE_SOLID;
+
+        if (isHorizontalSolid) {
+            k1.x = 0;
+            positionNext.x = p.x;
+        }
+        if (isVerticalSolid) {
+            k1.y = 0;
+            positionNext.y = p.y;
+        }
+
+        if (!isHorizontalSolid && !isVerticalSolid) {
+            if (abs(dp.x) < abs(dp.y)) {
+                k1.x = 0;
+                positionNext.x = p.x;
+            } else {
+                k1.y = 0;
+                positionNext.y = p.y;
+            }
+        }
+
+        int2 cellFinalPosition = floor(positionNext + 0.5);
+        if (GetCellType(cellFinalPosition.x, cellFinalPosition.y) == CELL_TYPE_FLUID) {
+            positionNext = p;
+            k1 = 0;
+        }
+
+    }
+    parcelsData[id.x].velocity = k1;
     parcelsData[id.x].position = positionNext;
 }
