@@ -366,10 +366,11 @@ MonoBehaviour:
   closeTopEdge: 1
   parcelsCompute: {fileID: 7200000, guid: d213d7f56582a7c31b6b0a9ef942abef, type: 3}
   count: 10000
+  collisionDampingFactor: 0.1
   solverIterations: 30
   sor: 1.7
   timeStepMultiplier: 1
-  gravity: {x: 0, y: -9.81}
+  gravity: {x: 0, y: 0}
   ambientTemperature: 25
   isSimulationPaused: 1
   velocityMultiplier: 1
@@ -415,6 +416,8 @@ MonoBehaviour:
   inputActiveColor: {r: 0, g: 1, b: 0.1, a: 0.3}
   obstacleColor: {r: 1, g: 1, b: 1, a: 1}
   cellSize: 1
+  parcelSize: 2
+  parcelColor: {r: 0.3, g: 0.3, b: 1, a: 1}
   momentumDisplayRange: 1
   momentumChannel: 2
   velocityDisplayRange: 1

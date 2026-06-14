@@ -58,6 +58,7 @@ public class Test : MonoBehaviour {
         simulation = new FluidSimulation(resolution.x, resolution.y, gridCompute, count, parcelsCompute);
         simulationRenderer = GetComponent<FluidRendererManager>();
         simulationRenderer.SetGridToRender(simulation.GridManager);
+        simulationRenderer.SetParcelsToRender(simulation.ParcelsManager);
 
         Camera.main.orthographicSize = resolution.y * simulationRenderer.cellSize * 0.6f;
     }

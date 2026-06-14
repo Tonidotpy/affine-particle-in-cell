@@ -17,7 +17,6 @@ public class FluidRendererManager : MonoBehaviour {
         Pressure,
         Temperature,
         Smoke,
-        Parcels,
     }
 
     /// <summary>
@@ -32,6 +31,7 @@ public class FluidRendererManager : MonoBehaviour {
     MeshRenderer meshRenderer = null;
     Material material = null;
     FluidGridManager grid = null;
+    FluidParcelsManager parcels = null;
 
     public Shader shader;
     public VisualizationMode visualizationMode = VisualizationMode.Debug;
@@ -47,6 +47,10 @@ public class FluidRendererManager : MonoBehaviour {
     [Header("Grid settings")]
     [Min(0.1f)]
     public float cellSize = 1f;
+
+    [Header("Parcels settings")]
+    public float parcelSize = 1f;
+    public Color parcelColor = new Color(0.3f, 0.3f, 1f, 1f);
 
     [Header("Momentum")]
     public float momentumDisplayRange = 1f;
@@ -137,7 +141,12 @@ public class FluidRendererManager : MonoBehaviour {
         material.SetTexture("smokeMap", grid.smokeMap);
         material.SetFloat("smokeDisplayRange", smokeDisplayRange);
 
-        // TODO: Parcels
+        // Parcels
+        material.SetFloat("cellSize", cellSize);
+        material.SetFloat("parcelSize", parcelSize);
+        material.SetVector("parcelColor", parcelColor);
+        if (parcels.parcelsData != null)
+            material.SetBuffer("parcelsData", parcels.parcelsData);
     }
 
     public void RenderInput(Vector2 mousePosition, bool isMousePressed) {
@@ -154,6 +163,16 @@ public class FluidRendererManager : MonoBehaviour {
         Draw.StartLayerIfNotInMatching(Vector2.zero, 1, true);
         Draw.Text(FontType.JetbrainsMonoRegular, $"Mode: {visualizationMode}", 20f,
                   new Vector2(30f, Screen.height - 20f), Anchor.TopLeft, Color.white);
+    }
+
+    void OnRenderObject() {
+        if (material == null || parcels.parcelsData == null || parcels.Count == 0)
+            return;
+
+        material.SetInt("parcelsPassActive", 1);
+        material.SetPass(1);
+        Graphics.DrawProceduralNow(MeshTopology.Points, parcels.Count);
+        material.SetInt("parcelsPassActive", 0);
     }
 
     /// <summary>
@@ -189,6 +208,14 @@ public class FluidRendererManager : MonoBehaviour {
     /// <param name="grid">The Grid to render</param>
     public void SetGridToRender(FluidGridManager grid) {
         this.grid = grid;
+    }
+
+    /// <summary>
+    /// Set the fluid Parcels to render
+    /// </summary>
+    /// <param name="parcels">The Parcels to render</param>
+    public void SetParcelsToRender(FluidParcelsManager parcels) {
+        this.parcels = parcels;
     }
 
     /// <summary>

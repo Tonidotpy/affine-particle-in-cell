@@ -5,31 +5,31 @@ Shader "Unlit/FluidRenderer" {
         Blend SrcAlpha OneMinusSrcAlpha
         Tags{ "RenderType" = "Opaque" } LOD 100
 
-            Pass {
+        Pass {
             CGPROGRAM
-#pragma vertex vert
-#pragma fragment frag
+            #pragma vertex vert
+            #pragma fragment frag
 
-#include "UnityCG.cginc"
+            #include "UnityCG.cginc"
 
-// Cell types
-#define CELL_TYPE_SOLID (0)
-#define CELL_TYPE_FLUID (1)
+            // Cell types
+            #define CELL_TYPE_SOLID (0)
+            #define CELL_TYPE_FLUID (1)
 
-// Velocity channels
-#define VELOCITY_CHANNEL_X (0)
-#define VELOCITY_CHANNEL_Y (1)
-#define VELOCITY_CHANNEL_BOTH (2)
+            // Velocity channels
+            #define VELOCITY_CHANNEL_X (0)
+            #define VELOCITY_CHANNEL_Y (1)
+            #define VELOCITY_CHANNEL_BOTH (2)
 
-// Visualization modes
-#define VISUALIZATION_MODE_DEBUG (0)
-#define VISUALIZATION_MODE_MOMENTUM (1)
-#define VISUALIZATION_MODE_VELOCITY (2)
-#define VISUALIZATION_MODE_DIVERGENCE (3)
-#define VISUALIZATION_MODE_PRESSURE (4)
-#define VISUALIZATION_MODE_TEMPERATURE (5)
-#define VISUALIZATION_MODE_SMOKE (6)
-#define VISUALIZATION_MODE_PARCELS (7)
+            // Visualization modes
+            #define VISUALIZATION_MODE_DEBUG (0)
+            #define VISUALIZATION_MODE_MOMENTUM (1)
+            #define VISUALIZATION_MODE_VELOCITY (2)
+            #define VISUALIZATION_MODE_DIVERGENCE (3)
+            #define VISUALIZATION_MODE_PRESSURE (4)
+            #define VISUALIZATION_MODE_TEMPERATURE (5)
+            #define VISUALIZATION_MODE_SMOKE (6)
+            #define VISUALIZATION_MODE_PARCELS (7)
 
             struct appdata {
                 float4 vertex : POSITION;
@@ -193,6 +193,66 @@ Shader "Unlit/FluidRenderer" {
                     col = RenderObstacle(i, col);
                 return col;
             }
+            ENDCG
+        }
+        Pass {
+            ZTest Always
+            ZWrite Off
+
+            CGPROGRAM
+
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma target 4.5
+
+            #include "UnityCG.cginc"
+
+            struct v2f {
+                float4 position : SV_POSITION;
+                float size      : PSIZE;
+                fixed4 color    : COLOR;
+            };
+
+            struct ParcelsData {
+                float mass;
+                float2 position;
+                float2 velocity;
+                float2 cx;
+                float2 cy;
+            };
+
+            float cellSize;
+            int2 resolution;
+
+            int parcelsPassActive;
+            StructuredBuffer<ParcelsData> parcelsData;
+            float parcelSize;
+            fixed4 parcelColor;
+
+            v2f vert(uint id : SV_VertexID) {
+                if (parcelsPassActive == 0) {
+                    v2f o;
+                    o.position = float4(2, 2, 2, 1); // outside [-1,1] clip cube → culled
+                    o.size = 0;
+                    o.color = 0;
+                    return o;
+                }
+
+
+                float2 p = parcelsData[id].position;
+                float2 worldPosition = (p - (resolution - 1) * 0.5) * cellSize;
+
+                v2f o;
+                o.position = UnityWorldToClipPos(float4(worldPosition.xy, 0, 1));
+                o.size = parcelSize;
+                o.color = parcelColor;
+                return o;
+            }
+
+            fixed4 frag(v2f i) : SV_Target {
+                return i.color;
+            }
+
             ENDCG
         }
     }
