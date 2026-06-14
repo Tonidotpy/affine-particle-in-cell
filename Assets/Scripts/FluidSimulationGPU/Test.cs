@@ -19,6 +19,9 @@ public class Test : MonoBehaviour {
     public ComputeShader parcelsCompute;
     public int count = 100;
 
+    [Range(0f, 1f)]
+    public float collisionDampingFactor = 0.1f;
+
     [Header("Simulation Settings")]
     public int solverIterations = 15;
     public float sor = 1.7f;

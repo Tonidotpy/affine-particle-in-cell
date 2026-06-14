@@ -19,6 +19,8 @@ public class FluidSimulation {
     float temperatureDecayMultiplier = 1f;
     float temperatureBuoyancyMultiplier = 1f;
 
+    float collisionDampingFactor = 0.1f;
+
     /// <summary>
     /// Simulation time step in seconds
     /// </summary>
@@ -145,6 +147,15 @@ public class FluidSimulation {
         set { temperatureBuoyancyMultiplier = Mathf.Max(value, 0); }
     }
 
+    /// <summary>
+    /// Factor to control how much energy should be dissipated by the Parcels
+    /// during a collision
+    /// </summary>
+    public float CollisionDampingFactor {
+        get { return collisionDampingFactor; }
+        set { collisionDampingFactor = Mathf.Clamp(value, 0f, 1f); }
+    }
+
     public FluidSimulation(int gridWidth, int gridHeight, ComputeShader gridCompute, int parcelsCount,
                            ComputeShader parcelsCompute) {
         parcelsManager = new FluidParcelsManager(parcelsCount, parcelsCompute);
@@ -156,6 +167,7 @@ public class FluidSimulation {
     /// </summary>
     public void SetupStep() {
         UpdateGridSettings();
+        UpdateParcelsSettings();
         parcelsManager.Setup(gridManager);
         gridManager.Setup(parcelsManager);
     }
@@ -171,10 +183,12 @@ public class FluidSimulation {
 
         parcelsManager.TransferGridData(gridManager);
         parcelsManager.UpdateAffineState(gridManager);
+
         parcelsManager.Advect(gridManager, timeStep);
 
         gridManager.TransferParcelsData(parcelsManager, timeStep);
 
+        // DEPRECATED: Advection has been moved from the Grid to the Parcels
         // For advection the fluid is required to be divergence free
         // so this step is done immediately after the pressure correction
         // gridManager.AdvectSmoke(timeStep);
@@ -214,6 +228,10 @@ public class FluidSimulation {
         gridManager.temperatureDecayMultiplier = temperatureDecayMultiplier;
         gridManager.temperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
         gridManager.obstacles = Obstacles;
+    }
+
+    void UpdateParcelsSettings() {
+        parcelsManager.CollisionDampingFactor = collisionDampingFactor;
     }
 }
 }

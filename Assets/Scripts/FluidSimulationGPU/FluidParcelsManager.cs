@@ -25,9 +25,11 @@ public class FluidParcelsManager {
     public ComputeBuffer parcelsData;
 
     public int Count { get; set; }
+    public float CollisionDampingFactor { get; set; }
 
     public FluidParcelsManager(int count, ComputeShader compute) {
         Count = count < 1 ? 1 : count;
+        CollisionDampingFactor = 0.1f;
         this.compute = compute;
 
         CreateBuffers();
@@ -54,6 +56,7 @@ public class FluidParcelsManager {
 
     void BindSettings(FluidGridManager gridManager) {
         compute.SetInt("count", Count);
+        compute.SetFloat("collisionDampingFactor", CollisionDampingFactor);
         compute.SetInts("gridResolution", gridManager.resolution.x, gridManager.resolution.y);
     }
 

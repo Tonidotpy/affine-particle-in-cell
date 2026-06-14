@@ -29,6 +29,7 @@ Shader "Unlit/FluidRenderer" {
 #define VISUALIZATION_MODE_PRESSURE (4)
 #define VISUALIZATION_MODE_TEMPERATURE (5)
 #define VISUALIZATION_MODE_SMOKE (6)
+#define VISUALIZATION_MODE_PARCELS (7)
 
             struct appdata {
                 float4 vertex : POSITION;
@@ -77,6 +78,8 @@ Shader "Unlit/FluidRenderer" {
             // Smoke
             sampler2D smokeMap;
             float smokeDisplayRange;
+
+            // TODO: Parcels
 
             v2f vert(appdata v) {
                 v2f o;

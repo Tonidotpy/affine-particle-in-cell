@@ -18,6 +18,7 @@ struct ParcelsData {
 
 // --- Settings --- //
 const float dt;
+const float collisionDampingFactor;
 
 const uint count;
 const uint2 gridResolution;
@@ -207,20 +208,20 @@ void Advect(uint3 id : SV_DispatchThreadID) {
         bool isVerticalSolid = GetCellType(cellVerticalNext.x, cellVerticalNext.y) == CELL_TYPE_SOLID;
 
         if (isHorizontalSolid) {
-            k1.x = 0;
+            k1.x *= -1 * (1.0 - collisionDampingFactor);
             positionNext.x = p.x;
         }
         if (isVerticalSolid) {
-            k1.y = 0;
+            k1.y *= -1 * (1.0 - collisionDampingFactor);
             positionNext.y = p.y;
         }
 
         if (!isHorizontalSolid && !isVerticalSolid) {
             if (abs(dp.x) < abs(dp.y)) {
-                k1.x = 0;
+                k1.x *= -1 * (1.0 - collisionDampingFactor);
                 positionNext.x = p.x;
             } else {
-                k1.y = 0;
+                k1.y *= -1 * (1.0 - collisionDampingFactor);
                 positionNext.y = p.y;
             }
         }
@@ -228,7 +229,7 @@ void Advect(uint3 id : SV_DispatchThreadID) {
         int2 cellFinalPosition = floor(positionNext + 0.5);
         if (GetCellType(cellFinalPosition.x, cellFinalPosition.y) == CELL_TYPE_FLUID) {
             positionNext = p;
-            k1 = 0;
+            k1 *= -1 * (1.0 - collisionDampingFactor);
         }
 
     }

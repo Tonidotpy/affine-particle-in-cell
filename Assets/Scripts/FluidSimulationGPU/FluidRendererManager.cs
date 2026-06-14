@@ -17,6 +17,7 @@ public class FluidRendererManager : MonoBehaviour {
         Pressure,
         Temperature,
         Smoke,
+        Parcels,
     }
 
     /// <summary>
@@ -135,6 +136,8 @@ public class FluidRendererManager : MonoBehaviour {
         // Smoke
         material.SetTexture("smokeMap", grid.smokeMap);
         material.SetFloat("smokeDisplayRange", smokeDisplayRange);
+
+        // TODO: Parcels
     }
 
     public void RenderInput(Vector2 mousePosition, bool isMousePressed) {
