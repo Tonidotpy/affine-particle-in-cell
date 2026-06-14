@@ -187,6 +187,7 @@ public class FluidSimulation {
         parcelsManager.Advect(gridManager, timeStep);
 
         gridManager.TransferParcelsData(parcelsManager, timeStep);
+        gridManager.ApplyForces(timeStep);
 
         // DEPRECATED: Advection has been moved from the Grid to the Parcels
         // For advection the fluid is required to be divergence free

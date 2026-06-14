@@ -18,6 +18,7 @@
 #pragma kernel PreparePressureSolver
 #pragma kernel RunPressureSolver
 #pragma kernel UpdateVelocities
+#pragma kernel ApplyForces
 #pragma kernel HandleInput
 #pragma kernel UpdateObstacles
 #pragma kernel UpdateObstacleEdges
@@ -798,7 +799,7 @@ void RunPressureSolver(uint3 id : SV_DispatchThreadID) {
     pressureMap[cell] = oldPressure + (newPressure - oldPressure) * sor;
 }
 
-[numthreads(8, 8, 1)]
+[numthreads(8,8,1)]
 void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
     if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) return;
@@ -819,7 +820,13 @@ void UpdateVelocities(uint3 id : SV_DispatchThreadID) {
     velocityMap[id.xy] = v.xy;
 }
 
-[numthreads(8, 8, 1)]
+[numthreads(8,8,1)]
+void ApplyForces(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+    velocityMap[id.xy] += gravity * dt;
+}
+
+[numthreads(8,8,1)]
 void HandleInput(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
 

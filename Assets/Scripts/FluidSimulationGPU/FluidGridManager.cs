@@ -27,6 +27,7 @@ public class FluidGridManager {
         PreparePressureSolver,
         RunPressureSolver,
         UpdateVelocities,
+        ApplyForces,
         HandleInput,
         UpdateObstacles,
         UpdateObstacleEdges,
@@ -324,7 +325,13 @@ public class FluidGridManager {
     public void UpdateVelocities(float dt) {
         compute.SetFloat("dt", dt);
         compute.SetFloat("density", density);
-        ComputeHelper.Dispatch(compute, resolution.x + 1, resolution.y + 1, ComputeKernel.UpdateVelocities);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateVelocities);
+    }
+
+    public void ApplyForces(float dt) {
+        compute.SetFloat("dt", dt);
+        compute.SetVector("gravity", gravity);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.ApplyForces);
     }
 
     /// <summary>
