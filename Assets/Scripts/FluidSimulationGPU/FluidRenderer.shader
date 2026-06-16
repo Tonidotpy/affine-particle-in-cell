@@ -11,10 +11,7 @@ Shader "Unlit/FluidRenderer" {
             #pragma fragment frag
 
             #include "UnityCG.cginc"
-
-            // Cell types
-            #define CELL_TYPE_SOLID (0)
-            #define CELL_TYPE_FLUID (1)
+            #include "FluidSimulation.cginc"
 
             // Velocity channels
             #define VELOCITY_CHANNEL_X (0)
@@ -78,8 +75,6 @@ Shader "Unlit/FluidRenderer" {
             // Smoke
             sampler2D smokeMap;
             float smokeDisplayRange;
-
-            // TODO: Parcels
 
             v2f vert(appdata v) {
                 v2f o;
@@ -206,19 +201,12 @@ Shader "Unlit/FluidRenderer" {
             #pragma target 4.5
 
             #include "UnityCG.cginc"
+            #include "FluidSimulation.cginc"
 
             struct v2f {
                 float4 position : SV_POSITION;
                 float size      : PSIZE;
                 fixed4 color    : COLOR;
-            };
-
-            struct ParcelsData {
-                float mass;
-                float2 position;
-                float2 velocity;
-                float2 cx;
-                float2 cy;
             };
 
             float cellSize;
@@ -238,14 +226,13 @@ Shader "Unlit/FluidRenderer" {
                     return o;
                 }
 
-
                 float2 p = parcelsData[id].position;
                 float2 worldPosition = (p - (resolution - 1) * 0.5) * cellSize;
 
                 v2f o;
                 o.position = UnityWorldToClipPos(float4(worldPosition.xy, 0, 1));
                 o.size = parcelSize;
-                o.color = parcelColor;
+                o.color = parcelsData[id].toRemove > 0 ? fixed4(1, 0, 0, 1) : parcelColor;
                 return o;
             }
 

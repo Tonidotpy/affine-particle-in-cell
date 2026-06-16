@@ -170,6 +170,7 @@ public class FluidRendererManager : MonoBehaviour {
             return;
 
         material.SetInt("parcelsPassActive", 1);
+        material.SetBuffer("parcelsData", parcels.parcelsData);
         material.SetPass(1);
         Graphics.DrawProceduralNow(MeshTopology.Points, parcels.Count);
         material.SetInt("parcelsPassActive", 0);

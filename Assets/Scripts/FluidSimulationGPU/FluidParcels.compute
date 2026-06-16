@@ -2,26 +2,22 @@
 #pragma kernel TransferVelocities
 #pragma kernel UpdateAffineState
 #pragma kernel Advect
+#pragma kernel BitonicSortStep
 
-// --- Constants --- //
-static const uint CELL_TYPE_SOLID = 0;
-static const uint CELL_TYPE_FLUID = 1;
-
-// --- Structures --- //
-struct ParcelsData {
-    float mass;
-    float2 position;
-    float2 velocity;
-    float2 cx;
-    float2 cy;
-};
+#include "FluidSimulation.cginc"
 
 // --- Settings --- //
 const float dt;
 const float collisionDampingFactor;
 
 const uint count;
+const uint powerOfTwoCount;
 const uint2 gridResolution;
+
+// Parcels deletion
+RWStructuredBuffer<int> parcelsToRemove;
+uint bitonicMajorStepIndex;
+uint bitonicMinorStepIndex;
 
 // --- Buffers --- //
 RWStructuredBuffer<ParcelsData> parcelsData;
@@ -65,7 +61,15 @@ float2 SampleVelocity(float2 position) {
 // --- Kernels --- //
 [numthreads(64,1,1)]
 void Init(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= powerOfTwoCount) return;
+    parcelsData[id.x].toRemove = 7;
+
     if (id.x >= count) return;
+    parcelsData[id.x].toRemove = 0;
+
+    if (id.x == 0) {
+        parcelsToRemove[0] = 0;
+    }
 
     // TODO: Remove
     parcelsData[id.x].mass = 1;
@@ -76,6 +80,11 @@ void Init(uint3 id : SV_DispatchThreadID) {
 [numthreads(64,1,1)]
 void TransferVelocities(uint3 id : SV_DispatchThreadID) {
     if (id.x >= count) return;
+
+    // Reset flags to remove parcels here for simplicity
+    if (id.x == 0) { parcelsToRemove[0] = 0; }
+    parcelsData[id.x].toRemove = 0;
+
     float2 v = 0;
     float2 p = parcelsData[id.x].position;
 
@@ -235,4 +244,37 @@ void Advect(uint3 id : SV_DispatchThreadID) {
     }
     parcelsData[id.x].velocity = k1;
     parcelsData[id.x].position = positionNext;
+
+    // Mark the Parcel as 'to be removed' if outside of the Grid boundaries but
+    // not near enough to contribute to the Cells at the edges of the Grid
+    if (positionNext.x < -1.0 || positionNext.x > (float)gridResolution.x ||
+        positionNext.y < -1.0 || positionNext.y > (float)gridResolution.y) {
+        parcelsData[id.x].toRemove = 1;
+        InterlockedAdd(parcelsToRemove[0], 1);
+    }
+}
+
+[numthreads(64,1,1)]
+void BitonicSortStep(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= powerOfTwoCount) return;
+    uint i = id.x;
+    uint l = i ^ bitonicMinorStepIndex;
+
+    /* The threads with the lowest ids sort the array. */
+    if (l > i) {
+        int2 toRemove = int2(parcelsData[i].toRemove, parcelsData[l].toRemove);
+
+        if ((i & bitonicMajorStepIndex) == 0) {
+            /* Sort ascending */
+            if (toRemove.x > toRemove.y) {
+                SWAP(parcelsData[i], parcelsData[l], struct ParcelsData);
+            }
+        }
+        else if ((i & bitonicMajorStepIndex) != 0) {
+            /* Sort descending */
+            if (toRemove.x < toRemove.y) {
+                SWAP(parcelsData[i], parcelsData[l], struct ParcelsData);
+            }
+        }
+    }
 }

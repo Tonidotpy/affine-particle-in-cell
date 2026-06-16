@@ -26,10 +26,9 @@
 #pragma kernel UpdateVelocitySources
 #pragma kernel ClearObstacles
 
-// --- Constants --- //
-static const uint UINT_MAX = 0xFFFFFFFF;
-static const uint INT_MAX = 0x7FFFFFFF;
+#include "FluidSimulation.cginc"
 
+// --- Constants --- //
 static const uint FLOW_TOP_BIT_POS = 31;
 static const uint FLOW_BOTTOM_BIT_POS = 30;
 static const uint FLOW_RIGHT_BIT_POS = 29;
@@ -39,13 +38,6 @@ static const uint EDGE_TOP_BIT_POS = 3;
 static const uint EDGE_BOTTOM_BIT_POS = 2;
 static const uint EDGE_RIGHT_BIT_POS = 1;
 static const uint EDGE_LEFT_BIT_POS = 0;
-
-static const uint CELL_TYPE_SOLID = 0;
-static const uint CELL_TYPE_FLUID = 1;
-
-static const uint AXIS_ALL = -1;
-static const uint AXIS_X = 0;
-static const uint AXIS_Y = 1;
 
 // --- Structures --- //
 struct PressureSolverData {
@@ -64,14 +56,6 @@ struct ObstacleData {
     float smokeRateMultiplier;
     float3 smokeRate;
     float temperature;
-};
-
-struct ParcelsData {
-    float mass;
-    float2 position;
-    float2 velocity;
-    float2 cx;
-    float2 cy;
 };
 
 struct P2GCenterData {
@@ -162,8 +146,6 @@ RWStructuredBuffer<int3> p2gReductionStart;
 RWStructuredBuffer<int3> p2gReductionEnd;
 
 // --- Utilities --- //
-
-#define SWAP(a, b, type) { type aux = a; a = b; b = aux; }
 
 uint2 ClampCoordinates(int i, int j) {
     return (uint2)clamp(int2(i, j), 0, (int2)resolution - 1);
