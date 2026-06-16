@@ -9,7 +9,8 @@ public class FluidParcelsManager {
         TransferVelocities,
         UpdateAffineState,
         Advect,
-        BitonicSortStep
+        BitonicSortStep,
+        AddParcels
     }
 
     struct ParcelsData {
@@ -50,7 +51,7 @@ public class FluidParcelsManager {
         compute.SetInt("count", Count);
         ComputeHelper.SetBuffer(compute, parcelsToRemove, "parcelsToRemove", computeKernels);
         ComputeHelper.SetBuffer(compute, parcelsData, "parcelsData", computeKernels);
-        ComputeHelper.Dispatch(compute, maxCount, 1, ComputeKernel.Init);
+        ComputeHelper.Dispatch(compute, MaxCount, 1, ComputeKernel.Init);
     }
 
     public void Setup(FluidGridManager gridManager) {
@@ -121,6 +122,17 @@ public class FluidParcelsManager {
 
         count = Math.Max(0, count - removed);
         compute.SetInt("count", Count);
+    }
+
+    public void AddParcelsAtPosition(Vector2 origin, float radius, int count) {
+        int toAdd = Mathf.Min(count, this.maxCount - this.count);
+        if (toAdd <= 0)
+            return;
+        compute.SetInt("parcelsToAdd", toAdd);
+        compute.SetVector("parcelsAddOrigin", origin);
+        compute.SetFloat("parcelsAddRadius", radius);
+        ComputeHelper.Dispatch(compute, toAdd, 1, ComputeKernel.AddParcels);
+        this.count = Math.Min(this.count + toAdd, this.maxCount);
     }
 
     public void ReleaseBuffers() {

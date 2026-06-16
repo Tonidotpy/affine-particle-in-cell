@@ -3,6 +3,7 @@
 #pragma kernel UpdateAffineState
 #pragma kernel Advect
 #pragma kernel BitonicSortStep
+#pragma kernel AddParcels
 
 #include "FluidSimulation.cginc"
 
@@ -18,6 +19,11 @@ const uint2 gridResolution;
 RWStructuredBuffer<int> parcelsToRemove;
 uint bitonicMajorStepIndex;
 uint bitonicMinorStepIndex;
+
+// Parcels addition
+uint parcelsToAdd;
+float2 parcelsAddOrigin;
+float parcelsAddRadius;
 
 // --- Buffers --- //
 RWStructuredBuffer<ParcelsData> parcelsData;
@@ -277,4 +283,27 @@ void BitonicSortStep(uint3 id : SV_DispatchThreadID) {
             }
         }
     }
+}
+
+[numthreads(64,1,1)]
+void AddParcels(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= parcelsToAdd) return;
+
+    uint index = count + id.x;
+
+    float2 angleSeed = Random2(float2(id.x, cos(index * 12535.0345)));
+    float2 lengthSeed = Random2(angleSeed);
+
+    float angle = Random1(angleSeed) * 2 * PI;
+    float2 direction = float2(cos(angle), sin(angle));
+    float2 offset = direction * parcelsAddRadius * Random1(lengthSeed);
+
+    float2 position = parcelsAddOrigin + offset;
+
+    parcelsData[index].toRemove = 0;
+    parcelsData[index].mass = 1;
+    parcelsData[index].position = position;
+    parcelsData[index].velocity = 0;
+    parcelsData[index].cx = 0;
+    parcelsData[index].cy = 0;
 }

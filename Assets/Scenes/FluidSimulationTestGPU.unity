@@ -365,7 +365,7 @@ MonoBehaviour:
   closeRightEdge: 0
   closeTopEdge: 0
   parcelsCompute: {fileID: 7200000, guid: d213d7f56582a7c31b6b0a9ef942abef, type: 3}
-  count: 2000
+  count: 2048
   collisionDampingFactor: 0.1
   solverIterations: 30
   sor: 1.7

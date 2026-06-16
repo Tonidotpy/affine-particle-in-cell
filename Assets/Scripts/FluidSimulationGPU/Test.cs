@@ -34,7 +34,8 @@ public class Test : MonoBehaviour {
     public float velocityMultiplier = 5f;
 
     [Header("Smoke Settings")]
-    public float smokeAmount = 0.2f;
+    [Min(1)]
+    public int smokeAmount = 10;
     public float smokeTemperature = 26f; // °C
     public float smokeDiffusionMultiplier = 0.3f;
     public float smokeDecayMultiplier = 1f;
@@ -130,9 +131,8 @@ public class Test : MonoBehaviour {
         }
 
         if (isMouseRightHeld) {
-            Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
-            simulation.GridManager.AddSmokeAtPosition(cellCenter, mouseInputRadius, smokeAmount,
-                                                      simulationRenderer.smokeColor, CelsiusToKelvin(smokeTemperature));
+            Vector2Int origin = simulationRenderer.WorldToCellCenter(mousePosition);
+            simulation.ParcelsManager.AddParcelsAtPosition(origin, mouseInputRadius, smokeAmount);
         }
 
         simulationRenderer.inputRadius = Mathf.Max(0, simulationRenderer.inputRadius + mouseScrollDelta * 0.1f);

@@ -392,51 +392,50 @@ public class FluidGridManager {
         compute.SetBool("closeRightEdge", closeRightEdge);
         compute.SetBool("closeTopEdge", closeTopEdge);
 
-        if (count > 0) {
-            int vertexCount = 0;
-            int triangleCount = 0;
-            Array.ForEach(obstacles, obstacle => {
-                vertexCount += obstacle.GetMeshVertexCount;
-                triangleCount += obstacle.GetMeshTriangleCount;
-            });
+        int vertexCount = 0;
+        int triangleCount = 0;
+        Array.ForEach(obstacles, obstacle => {
+            vertexCount += obstacle.GetMeshVertexCount;
+            triangleCount += obstacle.GetMeshTriangleCount;
+        });
 
-            ComputeHelper.CreateStructuredBuffer<FluidObstacle.ObstacleData>(ref obstacleData, count,
-                                                                             mode: ComputeBufferMode.SubUpdates);
-            ComputeHelper.CreateStructuredBuffer<FluidObstacle.MeshDataIndex>(ref obstacleIndices, count + 1,
-                                                                              mode: ComputeBufferMode.SubUpdates);
-            ComputeHelper.CreateStructuredBuffer<Vector2>(ref obstacleVertices, vertexCount);
-            ComputeHelper.CreateStructuredBuffer<int>(ref obstacleTriangles, triangleCount);
+        // One element is added to avoid creating an empty buffer
+        ComputeHelper.CreateStructuredBuffer<FluidObstacle.ObstacleData>(ref obstacleData, count + 1,
+                                                                         mode: ComputeBufferMode.SubUpdates);
+        ComputeHelper.CreateStructuredBuffer<FluidObstacle.MeshDataIndex>(ref obstacleIndices, count + 2,
+                                                                          mode: ComputeBufferMode.SubUpdates);
+        ComputeHelper.CreateStructuredBuffer<Vector2>(ref obstacleVertices, vertexCount + 1);
+        ComputeHelper.CreateStructuredBuffer<int>(ref obstacleTriangles, triangleCount + 1);
 
-            ComputeHelper.SetBuffer(compute, obstacleData, "obstacleData", computeKernels);
-            ComputeHelper.SetBuffer(compute, obstacleIndices, "obstacleIndices", computeKernels);
-            ComputeHelper.SetBuffer(compute, obstacleVertices, "obstacleVertices", computeKernels);
-            ComputeHelper.SetBuffer(compute, obstacleTriangles, "obstacleTriangles", computeKernels);
+        ComputeHelper.SetBuffer(compute, obstacleData, "obstacleData", computeKernels);
+        ComputeHelper.SetBuffer(compute, obstacleIndices, "obstacleIndices", computeKernels);
+        ComputeHelper.SetBuffer(compute, obstacleVertices, "obstacleVertices", computeKernels);
+        ComputeHelper.SetBuffer(compute, obstacleTriangles, "obstacleTriangles", computeKernels);
 
-            var data = obstacleData.BeginWrite<FluidObstacle.ObstacleData>(0, count);
-            var indices = obstacleIndices.BeginWrite<FluidObstacle.MeshDataIndex>(0, count + 1);
+        var data = obstacleData.BeginWrite<FluidObstacle.ObstacleData>(0, count);
+        var indices = obstacleIndices.BeginWrite<FluidObstacle.MeshDataIndex>(0, count + 1);
 
-            int vertexIndex = 0;
-            int triangleIndex = 0;
-            for (int i = 0; i < count; ++i) {
-                data[i] = obstacles[i].GetObstacleData();
-                FluidObstacle.MeshData meshData = obstacles[i].GetMeshData();
+        int vertexIndex = 0;
+        int triangleIndex = 0;
+        for (int i = 0; i < count; ++i) {
+            data[i] = obstacles[i].GetObstacleData();
+            FluidObstacle.MeshData meshData = obstacles[i].GetMeshData();
 
-                // Set the index of the first vertex and triangle ID of the current obstacle
-                indices[i] = new FluidObstacle.MeshDataIndex { vertex = vertexIndex, triangle = triangleIndex };
+            // Set the index of the first vertex and triangle ID of the current obstacle
+            indices[i] = new FluidObstacle.MeshDataIndex { vertex = vertexIndex, triangle = triangleIndex };
 
-                int vertexLength = meshData.vertices.Length;
-                int triangleLength = meshData.triangles.Length;
-                obstacleVertices.SetData(meshData.vertices, 0, vertexIndex, vertexLength);
-                obstacleTriangles.SetData(meshData.triangles, 0, triangleIndex, triangleLength);
+            int vertexLength = meshData.vertices.Length;
+            int triangleLength = meshData.triangles.Length;
+            obstacleVertices.SetData(meshData.vertices, 0, vertexIndex, vertexLength);
+            obstacleTriangles.SetData(meshData.triangles, 0, triangleIndex, triangleLength);
 
-                vertexIndex += vertexLength;
-                triangleIndex += triangleLength;
-            }
-
-            indices[count] = new FluidObstacle.MeshDataIndex { vertex = vertexIndex, triangle = triangleIndex };
-            obstacleData.EndWrite<FluidObstacle.ObstacleData>(count);
-            obstacleIndices.EndWrite<FluidObstacle.MeshDataIndex>(count + 1);
+            vertexIndex += vertexLength;
+            triangleIndex += triangleLength;
         }
+
+        indices[count] = new FluidObstacle.MeshDataIndex { vertex = vertexIndex, triangle = triangleIndex };
+        obstacleData.EndWrite<FluidObstacle.ObstacleData>(count);
+        obstacleIndices.EndWrite<FluidObstacle.MeshDataIndex>(count + 1);
 
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateObstacles);
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.UpdateObstacleEdges);
