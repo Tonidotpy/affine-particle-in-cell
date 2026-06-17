@@ -31,6 +31,8 @@ public class Test : MonoBehaviour {
     public bool isSimulationPaused = false;
 
     [Header("Velocity Settings")]
+    [Range(0f, 1f)]
+    public float velocityDampingMultiplier = 0.1f;
     public float velocityMultiplier = 5f;
 
     [Header("Smoke Settings")]
@@ -91,6 +93,7 @@ public class Test : MonoBehaviour {
         simulation.Gravity = gravity;
         simulation.FluidDensity = fluidDensity;
         simulation.AmbientTemperature = ambientTemperature;
+        simulation.VelocityDampingMultiplier = velocityDampingMultiplier;
         simulation.SmokeDiffusionMultiplier = smokeDiffusionMultiplier;
         simulation.SmokeDecayMultiplier = smokeDecayMultiplier;
         simulation.SmokeBuoyancyMultiplier = smokeBuoyancyMultiplier;

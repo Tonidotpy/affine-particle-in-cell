@@ -10,7 +10,8 @@ public class FluidParcelsManager {
         UpdateAffineState,
         Advect,
         BitonicSortStep,
-        AddParcels
+        AddParcels,
+        UpdateSmokeSources
     }
 
     struct ParcelsData {
@@ -39,11 +40,13 @@ public class FluidParcelsManager {
         set { maxCount = Mathf.NextPowerOfTwo(value); }
     }
     public float CollisionDampingFactor { get; set; }
+    public float VelocityDampingMultiplier { get; set; }
 
     public FluidParcelsManager(int maxCount, ComputeShader compute) {
         this.maxCount = maxCount < 1 ? 1 : Mathf.NextPowerOfTwo(maxCount);
-        count = maxCount;
+        count = 0;
         CollisionDampingFactor = 0.1f;
+        VelocityDampingMultiplier = 0.9f;
         this.compute = compute;
 
         CreateBuffers();
@@ -62,12 +65,15 @@ public class FluidParcelsManager {
 
     void CreateBuffers() {
         ComputeHelper.CreateStructuredBuffer<ParcelsData>(ref parcelsData, maxCount);
-        ComputeHelper.CreateStructuredBuffer<int>(ref parcelsToRemove, 1);
+        ComputeHelper.CreateStructuredBuffer<int>(ref parcelsToRemove, 2);
     }
 
     void BindBuffers(FluidGridManager gridManager) {
         ComputeHelper.SetBuffer(compute, parcelsData, "parcelsData", computeKernels);
         ComputeHelper.SetBuffer(compute, parcelsToRemove, "parcelsToRemove", computeKernels);
+        if (gridManager.obstacleData != null) {
+            ComputeHelper.SetBuffer(compute, gridManager.obstacleData, "obstacleData", computeKernels);
+        }
         ComputeHelper.SetTexture(compute, gridManager.cellType, "cellType", computeKernels);
         ComputeHelper.SetTexture(compute, gridManager.velocityMap, "velocityMap", computeKernels);
         ComputeHelper.SetTexture(compute, gridManager.velocityMap, "velocityMapSample", computeKernels);
@@ -77,6 +83,7 @@ public class FluidParcelsManager {
         compute.SetInt("powerOfTwoCount", maxCount);
         compute.SetInt("count", Count);
         compute.SetFloat("collisionDampingFactor", CollisionDampingFactor);
+        compute.SetFloat("velocityDampingMultiplier", VelocityDampingMultiplier);
         compute.SetInts("gridResolution", gridManager.resolution.x, gridManager.resolution.y);
     }
 
@@ -95,6 +102,10 @@ public class FluidParcelsManager {
     public void Advect(FluidGridManager gridManager, float dt) {
         if (count <= 0)
             return;
+        // Update compute buffer used to flag Parcels to remove
+        int[] aux = new int[2] { 0, this.count };
+        parcelsToRemove.SetData(aux);
+
         compute.SetFloat("dt", dt);
         ComputeHelper.Dispatch(compute, count, 1, ComputeKernel.Advect);
     }
@@ -116,10 +127,9 @@ public class FluidParcelsManager {
         BitonicSort(maxCount);
 
         // Update Parcels count
-        int[] aux = new int[1];
+        int[] aux = new int[2];
         parcelsToRemove.GetData(aux);
         int removed = aux[0];
-
         count = Math.Max(0, count - removed);
         compute.SetInt("count", Count);
     }
@@ -133,6 +143,21 @@ public class FluidParcelsManager {
         compute.SetFloat("parcelsAddRadius", radius);
         ComputeHelper.Dispatch(compute, toAdd, 1, ComputeKernel.AddParcels);
         this.count = Math.Min(this.count + toAdd, this.maxCount);
+    }
+
+    public void AddParcelsFromSources(FluidGridManager gridManager, float dt) {
+        // Update compute buffer used to add Parcels from obstacle sources
+        int[] aux = new int[2] { 0, this.count };
+        parcelsToRemove.SetData(aux);
+
+        compute.SetFloat("dt", dt);
+        ComputeHelper.Dispatch(compute, gridManager.resolution.x, gridManager.resolution.y,
+                               ComputeKernel.UpdateSmokeSources);
+
+        parcelsToRemove.GetData(aux);
+        int totalCount = aux[1];
+        this.count = Math.Min(this.maxCount, totalCount);
+        compute.SetInt("count", this.count);
     }
 
     public void ReleaseBuffers() {

@@ -28,34 +28,10 @@
 
 #include "FluidSimulation.cginc"
 
-// --- Constants --- //
-static const uint FLOW_TOP_BIT_POS = 31;
-static const uint FLOW_BOTTOM_BIT_POS = 30;
-static const uint FLOW_RIGHT_BIT_POS = 29;
-static const uint FLOW_LEFT_BIT_POS = 28;
-
-static const uint EDGE_TOP_BIT_POS = 3;
-static const uint EDGE_BOTTOM_BIT_POS = 2;
-static const uint EDGE_RIGHT_BIT_POS = 1;
-static const uint EDGE_LEFT_BIT_POS = 0;
-
 // --- Structures --- //
 struct PressureSolverData {
     uint flowData;
     float velocityTerm;
-};
-
-struct ObstacleIndex {
-    int vertex;
-    int triang;
-};
-
-struct ObstacleData {
-    bool isSmokeSource;
-    float2 velocitySource;
-    float smokeRateMultiplier;
-    float3 smokeRate;
-    float temperature;
 };
 
 struct P2GCenterData {
@@ -325,7 +301,6 @@ void P2GAccumulateCellEdgeData(uint2 id, float2 p, float m, float2 v, float2 cx,
         int2(1, 1)
     };
 
-    // TODO: Check edgePosition, dp,  weights and momentum calculation
     // Horizontal axis
     {
         int2 edgePosition = floor(p.xy + float2(0.5, 0));
@@ -357,7 +332,7 @@ void P2GAccumulateCellEdgeData(uint2 id, float2 p, float m, float2 v, float2 cx,
             uint index = id.x * 4 + i;
             p2gEdgeDataY[index].cell = GetCellHash(cellPosition.xy + offset[i].xy);
             p2gEdgeDataY[index].mass = m * weights[i];
-            p2gEdgeDataX[index].momentum = m * weights[i] * (v.y + dot(cy, dp.xy + offset[i].xy));
+            p2gEdgeDataY[index].momentum = m * weights[i] * (v.y + dot(cy, dp.xy + offset[i].xy));
         }
     }
 }
@@ -610,7 +585,7 @@ void P2GTransferData(uint3 id : SV_DispatchThreadID) {
         edgeMassMap[id.xy] = float2(edgeMassMap[id.xy].x, m);
 
         float q = p2gEdgeDataY[end.y].momentum - p2gEdgeDataY[start.y].momentum;
-        edgeMomentumMap[id.xy] = float2(edgeMomentumMap[id.xy].x, m);
+        edgeMomentumMap[id.xy] = float2(edgeMomentumMap[id.xy].x, q);
     }
     if (start.z >= 0 && end.z >= 0 && end.z <= (int)p2gBufferSize) {
         float m = p2gCenterData[end.z].mass - p2gCenterData[start.z].mass;

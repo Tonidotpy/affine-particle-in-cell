@@ -151,9 +151,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FluidSimulationGPU.FluidObstacle
   isSmokeSource: 1
-  velocityRate: {x: 0, y: 0}
+  velocityRate: {x: 0, y: -50}
   smokeRateMultiplier: 1
-  smokeRate: {x: 1, y: 0, z: 1}
+  smokeRate: 1
   temperature: 30
 --- !u!23 &313268228
 MeshRenderer:
@@ -323,7 +323,7 @@ MonoBehaviour:
   isSmokeSource: 1
   velocityRate: {x: 0, y: 0}
   smokeRateMultiplier: 5
-  smokeRate: {x: 0.7, y: 0.2, z: 0.5}
+  smokeRate: 0
   temperature: 30
 --- !u!1 &1407357497
 GameObject:
@@ -365,7 +365,7 @@ MonoBehaviour:
   closeRightEdge: 0
   closeTopEdge: 0
   parcelsCompute: {fileID: 7200000, guid: d213d7f56582a7c31b6b0a9ef942abef, type: 3}
-  count: 2048
+  count: 5000
   collisionDampingFactor: 0.1
   solverIterations: 30
   sor: 1.7
@@ -373,8 +373,9 @@ MonoBehaviour:
   gravity: {x: 0, y: 0}
   ambientTemperature: 25
   isSimulationPaused: 1
+  velocityDampingMultiplier: 0.1
   velocityMultiplier: 1
-  smokeAmount: 0.2
+  smokeAmount: 10
   smokeTemperature: 30
   smokeDiffusionMultiplier: 0.7
   smokeDecayMultiplier: 0.08

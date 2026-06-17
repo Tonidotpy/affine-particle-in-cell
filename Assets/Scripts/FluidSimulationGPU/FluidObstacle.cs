@@ -13,7 +13,7 @@ public class FluidObstacle : MonoBehaviour {
         public bool isSmokeSource;
         public Vector2 velocityRate;
         public float smokeRateMultiplier;
-        public Vector3 smokeRate;
+        public float smokeRate;
         public float temperature;
     }
 
@@ -34,7 +34,7 @@ public class FluidObstacle : MonoBehaviour {
     public Vector2 velocityRate;
     [Min(0f)]
     public float smokeRateMultiplier = 1;
-    public Vector3 smokeRate; // Amount of smoke per second
+    public float smokeRate;        // Amount of smoke per second
     public float temperature = 25; // °C
 
     public Vector3 Origin { get; set; }
@@ -58,9 +58,7 @@ public class FluidObstacle : MonoBehaviour {
 
     public ObstacleData GetObstacleData() {
         return new ObstacleData {
-            isSmokeSource = isSmokeSource,
-            velocityRate = velocityRate,
-            smokeRateMultiplier = smokeRateMultiplier,
+            isSmokeSource = isSmokeSource, velocityRate = velocityRate, smokeRateMultiplier = smokeRateMultiplier,
             smokeRate = smokeRate,
             temperature = Temperature, // !!! Use K instead of °C !!!
         };
@@ -76,10 +74,7 @@ public class FluidObstacle : MonoBehaviour {
             vertices[i] = localToWorld.MultiplyPoint3x4(localVertices[i]) + Origin;
         }
 
-        return new MeshData {
-            vertices = vertices,
-            triangles = triangles
-        };
+        return new MeshData { vertices = vertices, triangles = triangles };
     }
 }
 }

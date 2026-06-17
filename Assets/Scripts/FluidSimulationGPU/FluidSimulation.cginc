@@ -13,6 +13,18 @@
 #define AXIS_X (0);
 #define AXIS_Y (1);
 
+// Flow data bit position
+#define FLOW_TOP_BIT_POS (31)
+#define FLOW_BOTTOM_BIT_POS (30)
+#define FLOW_RIGHT_BIT_POS (29)
+#define FLOW_LEFT_BIT_POS (28)
+
+// Edge data bit position
+#define EDGE_TOP_BIT_POS (3)
+#define EDGE_BOTTOM_BIT_POS (2)
+#define EDGE_RIGHT_BIT_POS (1)
+#define EDGE_LEFT_BIT_POS (0)
+
 // --- Structures --- //
 struct ParcelsData {
     int toRemove;
@@ -21,6 +33,19 @@ struct ParcelsData {
     float2 velocity;
     float2 cx;
     float2 cy;
+};
+
+struct ObstacleIndex {
+    int vertex;
+    int triang;
+};
+
+struct ObstacleData {
+    bool isSmokeSource;
+    float2 velocitySource;
+    float smokeRateMultiplier;
+    float smokeRate;
+    float temperature;
 };
 
 // --- Utilities --- //

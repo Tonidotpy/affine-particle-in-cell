@@ -20,6 +20,7 @@ public class FluidSimulation {
     float temperatureBuoyancyMultiplier = 1f;
 
     float collisionDampingFactor = 0.1f;
+    float velocityDampingMultiplier = 0.9f;
 
     /// <summary>
     /// Simulation time step in seconds
@@ -100,6 +101,14 @@ public class FluidSimulation {
     }
 
     /// <summary>
+    /// Velocity damping multiplier to add energy loss
+    /// </summary>
+    public float VelocityDampingMultiplier {
+        get { return velocityDampingMultiplier; }
+        set { velocityDampingMultiplier = 1f - Mathf.Clamp(value, 0f, 1f); }
+    }
+
+    /// <summary>
     /// Smoke diffusion multiplier
     /// </summary>
     public float SmokeDiffusionMultiplier {
@@ -176,6 +185,8 @@ public class FluidSimulation {
     /// Run a single step of the fluid simulation
     /// </summary>
     public void RunStep() {
+        // TODO: Render SPH instead of individual particles
+
         // Since the fluid may be divergent it is needed to remove the divergence
         // based on pressure differences
         gridManager.SolvePressure(solverIterations, timeStep);
@@ -186,6 +197,7 @@ public class FluidSimulation {
 
         parcelsManager.Advect(gridManager, timeStep);
         parcelsManager.RemoveParcelsOutsideGridBounds();
+        parcelsManager.AddParcelsFromSources(gridManager, timeStep);
 
         gridManager.TransferParcelsData(parcelsManager, timeStep);
         gridManager.ApplyForces(timeStep);
@@ -234,6 +246,7 @@ public class FluidSimulation {
 
     void UpdateParcelsSettings() {
         parcelsManager.CollisionDampingFactor = collisionDampingFactor;
+        parcelsManager.VelocityDampingMultiplier = velocityDampingMultiplier;
     }
 }
 }
