@@ -49,7 +49,8 @@ public class FluidRendererManager : MonoBehaviour {
     public float cellSize = 1f;
 
     [Header("Parcels settings")]
-    public float parcelSize = 1f;
+    [Min(0.1f)]
+    public float parcelSmoothingRadius = 1f;
     public Color parcelColor = new Color(0.3f, 0.3f, 1f, 1f);
 
     [Header("Momentum")]
@@ -143,7 +144,7 @@ public class FluidRendererManager : MonoBehaviour {
 
         // Parcels
         material.SetFloat("cellSize", cellSize);
-        material.SetFloat("parcelSize", parcelSize);
+        material.SetFloat("parcelSmoothingRadius", parcelSmoothingRadius);
         material.SetVector("parcelColor", parcelColor);
         if (parcels.parcelsData != null)
             material.SetBuffer("parcelsData", parcels.parcelsData);
@@ -172,7 +173,7 @@ public class FluidRendererManager : MonoBehaviour {
         material.SetInt("parcelsPassActive", 1);
         material.SetBuffer("parcelsData", parcels.parcelsData);
         material.SetPass(1);
-        Graphics.DrawProceduralNow(MeshTopology.Points, parcels.Count);
+        Graphics.DrawProceduralNow(MeshTopology.Triangles, parcels.Count * 6);
         material.SetInt("parcelsPassActive", 0);
     }
 

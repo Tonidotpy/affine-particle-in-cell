@@ -417,7 +417,7 @@ MonoBehaviour:
   inputActiveColor: {r: 0, g: 1, b: 0.1, a: 0.3}
   obstacleColor: {r: 1, g: 1, b: 1, a: 1}
   cellSize: 1
-  parcelSize: 2
+  parcelSmoothingRadius: 10
   parcelColor: {r: 0.3, g: 0.3, b: 1, a: 1}
   momentumDisplayRange: 1
   momentumChannel: 2

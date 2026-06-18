@@ -38,7 +38,7 @@ Shader "Unlit/FluidRenderer" {
                 float4 vertex : SV_POSITION;
             };
 
-            int2 resolution;
+            float2 resolution;
             int visualizationMode;
             sampler2D debugMap;
 
@@ -193,6 +193,7 @@ Shader "Unlit/FluidRenderer" {
         Pass {
             ZTest Always
             ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
 
             CGPROGRAM
 
@@ -203,41 +204,71 @@ Shader "Unlit/FluidRenderer" {
             #include "UnityCG.cginc"
             #include "FluidSimulation.cginc"
 
+            struct appdata {
+                uint id : SV_VertexID;
+                float2 uv : TEXCOORD0;
+            };
+
             struct v2f {
                 float4 position : SV_POSITION;
-                float size      : PSIZE;
+                float2 uv       : TEXCOORD0;
                 fixed4 color    : COLOR;
             };
 
             float cellSize;
-            int2 resolution;
+            float2 resolution;
 
             int parcelsPassActive;
             StructuredBuffer<ParcelsData> parcelsData;
-            float parcelSize;
+            float parcelSmoothingRadius;
             fixed4 parcelColor;
 
-            v2f vert(uint id : SV_VertexID) {
+            // static const float2 corners[6] = {
+            //     float2(-1, -1), float2(1, -1), float2( 1,  1), // First triangle
+            //     float2(-1, -1), float2(1,  1), float2(-1,  1)  // Second triangle
+            // };
+
+            static const float2 corners[6] = {
+                float2(-1, -1), float2(1, 1), float2(1, -1), // First triangle
+                float2(-1, -1), float2(-1, 1), float2(1, 1)  // Second triangle
+            };
+
+            v2f vert(appdata v) {
                 if (parcelsPassActive == 0) {
                     v2f o;
                     o.position = float4(2, 2, 2, 1); // outside [-1,1] clip cube → culled
-                    o.size = 0;
+                    o.uv = 2;
                     o.color = 0;
                     return o;
                 }
 
-                float2 p = parcelsData[id].position;
+                uint parcelIndex = v.id / 6;
+                uint cornerIndex = v.id % 6;
+
+                float2 p = parcelsData[parcelIndex].position;
                 float2 worldPosition = (p - (resolution - 1) * 0.5) * cellSize;
 
+                float2 localUV = corners[cornerIndex];
+                float2 cornerPosition = worldPosition + localUV * parcelSmoothingRadius;
+
                 v2f o;
-                o.position = UnityWorldToClipPos(float4(worldPosition.xy, 0, 1));
-                o.size = parcelSize;
-                o.color = parcelsData[id].toRemove > 0 ? fixed4(1, 0, 0, 1) : parcelColor;
+                o.position = UnityWorldToClipPos(float4(cornerPosition, 0, 1));
+                o.uv = localUV;
+                o.color = parcelsData[parcelIndex].toRemove > 0 ?
+                                fixed4(1, 0, 0, 1) :
+                                parcelColor;
                 return o;
             }
 
             fixed4 frag(v2f i) : SV_Target {
-                return i.color;
+                float r = length(i.uv);
+                if (r > 1.0)
+                    discard;
+
+                float volume = 4.0 * PI / 3.0;
+                float q = 1.0 - r;
+                float w = q * q * q / volume;
+                return fixed4(i.color.rgb, i.color.a * w);
             }
 
             ENDCG
