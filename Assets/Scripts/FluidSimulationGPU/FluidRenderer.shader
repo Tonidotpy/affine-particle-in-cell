@@ -223,11 +223,6 @@ Shader "Unlit/FluidRenderer" {
             float parcelSmoothingRadius;
             fixed4 parcelColor;
 
-            // static const float2 corners[6] = {
-            //     float2(-1, -1), float2(1, -1), float2( 1,  1), // First triangle
-            //     float2(-1, -1), float2(1,  1), float2(-1,  1)  // Second triangle
-            // };
-
             static const float2 corners[6] = {
                 float2(-1, -1), float2(1, 1), float2(1, -1), // First triangle
                 float2(-1, -1), float2(-1, 1), float2(1, 1)  // Second triangle
