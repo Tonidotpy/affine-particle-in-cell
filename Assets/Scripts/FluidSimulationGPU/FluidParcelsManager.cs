@@ -151,6 +151,7 @@ public class FluidParcelsManager {
         parcelsToRemove.SetData(aux);
 
         compute.SetFloat("dt", dt);
+        compute.SetFloat("globalTime", Time.time);
         ComputeHelper.Dispatch(compute, gridManager.resolution.x, gridManager.resolution.y,
                                ComputeKernel.UpdateSmokeSources);
 

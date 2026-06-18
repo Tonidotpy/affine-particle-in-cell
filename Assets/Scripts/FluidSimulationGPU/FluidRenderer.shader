@@ -266,8 +266,8 @@ Shader "Unlit/FluidRenderer" {
                     discard;
 
                 float volume = 4.0 * PI / 3.0;
-                float q = 1.0 - r;
-                float w = q * q * q / volume;
+                float q = r - 1.0;
+                float w = q * q / volume;
                 return fixed4(i.color.rgb, i.color.a * w);
             }
 

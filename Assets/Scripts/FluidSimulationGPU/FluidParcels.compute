@@ -10,6 +10,7 @@
 
 // --- Settings --- //
 const float dt;
+const float globalTime;
 const float collisionDampingFactor;
 const float velocityDampingMultiplier;
 
@@ -313,6 +314,8 @@ void AddParcels(uint3 id : SV_DispatchThreadID) {
 void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
     if (id.x >= gridResolution.x || id.y >= gridResolution.y) return;
     if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) return;
+
+    if (Random1(id.xy * (globalTime % dt)) >= 0.03) return;
 
     bool isEdgeLeft = ((uint)cellType[id.xy].z & (1 << EDGE_LEFT_BIT_POS)) != 0;
     bool isEdgeBottom = ((uint)cellType[id.xy].z & (1 << EDGE_BOTTOM_BIT_POS)) != 0;

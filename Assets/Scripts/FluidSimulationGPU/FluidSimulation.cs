@@ -185,8 +185,6 @@ public class FluidSimulation {
     /// Run a single step of the fluid simulation
     /// </summary>
     public void RunStep() {
-        // TODO: Render SPH instead of individual particles
-
         // Since the fluid may be divergent it is needed to remove the divergence
         // based on pressure differences
         gridManager.SolvePressure(solverIterations, timeStep);
