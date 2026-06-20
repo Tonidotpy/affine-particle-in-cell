@@ -30,7 +30,8 @@ public class FluidParcels {
     }
 
     public void RemoveParcel(int index) {
-        if (index < 0 || index >= count) return;
+        if (index < 0 || index >= count)
+            return;
 
         int lastIndex = count - 1;
         if (index < lastIndex) {
@@ -45,13 +46,10 @@ public class FluidParcels {
     }
 
     public void AddParcel(FluidGridMac grid, Vector2 initalPosition, Vector2 initialVelocity) {
-        Vector2Int cellPosition = new Vector2Int(
-            Mathf.FloorToInt(initalPosition.x + 0.5f),
-            Mathf.FloorToInt(initalPosition.y + 0.5f)
-        );
+        Vector2Int cellPosition =
+            new Vector2Int(Mathf.FloorToInt(initalPosition.x + 0.5f), Mathf.FloorToInt(initalPosition.y + 0.5f));
         if (grid.GetCellType(cellPosition.x, cellPosition.y) == FluidGridMac.CellType.Solid)
             return;
-
 
         int capacity = mass.Length;
         if (count >= capacity) {
@@ -102,12 +100,8 @@ public class FluidParcels {
 
                 float xFrac = p.x - xLeft;
                 float yFrac = p.y - yCell;
-                float[] weight = {
-                    (1f - xFrac) * (1f - yFrac),
-                    (     xFrac) * (1f - yFrac),
-                    (1f - xFrac) * (     yFrac),
-                    (     xFrac) * (     yFrac)
-                };
+                float[] weight = { (1f - xFrac) * (1f - yFrac), (xFrac) * (1f - yFrac), (1f - xFrac) * (yFrac),
+                                   (xFrac) * (yFrac) };
                 for (int j = 0; j < 4; ++j) {
                     float velocity = grid.GetCellEdgeValue(grid.velocityU, x[j], y[j], FluidGridMac.Axis.X);
                     v.x += weight[j] * velocity;
@@ -124,12 +118,8 @@ public class FluidParcels {
 
                 float xFrac = p.x - xCell;
                 float yFrac = p.y - yBottom;
-                float[] weight = {
-                    (1f - xFrac) * (1f - yFrac),
-                    (     xFrac) * (1f - yFrac),
-                    (1f - xFrac) * (     yFrac),
-                    (     xFrac) * (     yFrac)
-                };
+                float[] weight = { (1f - xFrac) * (1f - yFrac), (xFrac) * (1f - yFrac), (1f - xFrac) * (yFrac),
+                                   (xFrac) * (yFrac) };
                 for (int j = 0; j < 4; ++j) {
                     float velocity = grid.GetCellEdgeValue(grid.velocityV, x[j], y[j], FluidGridMac.Axis.Y);
                     v.y += weight[j] * velocity;
@@ -146,10 +136,7 @@ public class FluidParcels {
     void TransferTemperature(FluidGridMac grid) {
         for (int i = 0; i < count; ++i) {
             Vector2 p = position[i];
-            Vector2Int cellPosition = new Vector2Int(
-                Mathf.FloorToInt(p.x + 0.5f),
-                Mathf.FloorToInt(p.y + 0.5f)
-            );
+            Vector2Int cellPosition = new Vector2Int(Mathf.FloorToInt(p.x + 0.5f), Mathf.FloorToInt(p.y + 0.5f));
 
             temperature[i] = grid.GetTemperature(cellPosition.x, cellPosition.y);
         }
@@ -174,12 +161,8 @@ public class FluidParcels {
 
                 float xFrac = p.x - xLeft;
                 float yFrac = p.y - yCell;
-                Vector2[] weightGradient = {
-                    new Vector2(yFrac - 1f, xFrac - 1f),
-                    new Vector2(1f - yFrac,    - xFrac),
-                    new Vector2(   - yFrac, 1f - xFrac),
-                    new Vector2(     yFrac,      xFrac)
-                };
+                Vector2[] weightGradient = { new Vector2(yFrac - 1f, xFrac - 1f), new Vector2(1f - yFrac, -xFrac),
+                                             new Vector2(-yFrac, 1f - xFrac), new Vector2(yFrac, xFrac) };
 
                 Vector2 c = Vector2.zero;
                 for (int j = 0; j < 4; ++j) {
@@ -199,12 +182,8 @@ public class FluidParcels {
 
                 float xFrac = p.x - xCell;
                 float yFrac = p.y - yBottom;
-                Vector2[] weightGradient = {
-                    new Vector2(yFrac - 1f, xFrac - 1f),
-                    new Vector2(1f - yFrac,    - xFrac),
-                    new Vector2(   - yFrac, 1f - xFrac),
-                    new Vector2(     yFrac,      xFrac)
-                };
+                Vector2[] weightGradient = { new Vector2(yFrac - 1f, xFrac - 1f), new Vector2(1f - yFrac, -xFrac),
+                                             new Vector2(-yFrac, 1f - xFrac), new Vector2(yFrac, xFrac) };
                 Vector2 c = Vector2.zero;
                 for (int j = 0; j < 4; ++j) {
                     float velocity = grid.GetCellEdgeValue(grid.velocityV, x[j], y[j], FluidGridMac.Axis.Y);
@@ -231,23 +210,24 @@ public class FluidParcels {
             // RK4 implementation
             Vector2 dp = (dt / 6f) * (k1 + 2 * k2 + 2 * k3 + k4);
 
-            if (dp == Vector2.zero) continue;
+            if (dp == Vector2.zero)
+                continue;
             // This adds dissipation but simplify collisions but it does not
             // happen that frequently. The magnitude usually seats between 0 and 1
             dp = Vector2.ClampMagnitude(dp, 1f);
 
             Vector2 positionNext = p + dp;
 
-            Vector2Int cellPosition = new Vector2Int(
-                Mathf.FloorToInt(positionNext.x + 0.5f),
-                Mathf.FloorToInt(positionNext.y + 0.5f)
-            );
+            Vector2Int cellPosition =
+                new Vector2Int(Mathf.FloorToInt(positionNext.x + 0.5f), Mathf.FloorToInt(positionNext.y + 0.5f));
             if (grid.GetCellType(cellPosition.x, cellPosition.y) == FluidGridMac.CellType.Solid) {
                 Vector2Int cellHorizontalNext = new Vector2Int(cellPosition.x, Mathf.FloorToInt(p.y + 0.5f));
                 Vector2Int cellVerticalNext = new Vector2Int(Mathf.FloorToInt(p.x + 0.5f), cellPosition.y);
 
-                bool isHorizontalSolid = grid.GetCellType(cellHorizontalNext.x, cellHorizontalNext.y) == FluidGridMac.CellType.Solid;
-                bool isVerticalSolid = grid.GetCellType(cellVerticalNext.x, cellVerticalNext.y) == FluidGridMac.CellType.Solid;
+                bool isHorizontalSolid =
+                    grid.GetCellType(cellHorizontalNext.x, cellHorizontalNext.y) == FluidGridMac.CellType.Solid;
+                bool isVerticalSolid =
+                    grid.GetCellType(cellVerticalNext.x, cellVerticalNext.y) == FluidGridMac.CellType.Solid;
 
                 if (isHorizontalSolid) {
                     velocity[i].x = 0;
@@ -262,25 +242,22 @@ public class FluidParcels {
                     if (Mathf.Abs(dp.x) < Mathf.Abs(dp.y)) {
                         velocity[i].x = 0;
                         positionNext.x = p.x;
-                    }
-                    else {
+                    } else {
                         velocity[i].y = 0;
                         positionNext.y = p.y;
                     }
                 }
 
-                Vector2Int cellFinalPosition = new Vector2Int(
-                    Mathf.FloorToInt(positionNext.x + 0.5f),
-                    Mathf.FloorToInt(positionNext.y + 0.5f)
-                );
+                Vector2Int cellFinalPosition =
+                    new Vector2Int(Mathf.FloorToInt(positionNext.x + 0.5f), Mathf.FloorToInt(positionNext.y + 0.5f));
                 if (grid.GetCellType(cellFinalPosition.x, cellFinalPosition.y) == FluidGridMac.CellType.Solid) {
                     positionNext = p;
                     velocity[i] = Vector2.zero;
                 }
             }
             position[i] = positionNext;
-            if (position[i].x <= -1f || position[i].x >= grid.width + 1f ||
-                position[i].y <= -1f || position[i].y >= grid.height + 1f) {
+            if (position[i].x <= -1f || position[i].x >= grid.width + 1f || position[i].y <= -1f ||
+                position[i].y >= grid.height + 1f) {
                 RemoveParcel(i);
                 --i; // Avoid skipping a particle
             }

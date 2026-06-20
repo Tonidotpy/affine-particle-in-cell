@@ -7,16 +7,20 @@ namespace FluidSimulationGPU {
 /// </summary>
 public class FluidSimulation {
     FluidGridManager gridManager;
+    FluidParcelsManager parcelsManager;
     Vector2 gravity = new Vector2(0, -9.81f); // m/s^2
     float fluidDensity = 1.3f;                // kg/m^2
 
-    float ambientTemperature = 300f;          // K
+    float ambientTemperature = 300f; // K
     float smokeDiffusionMultiplier = 0.3f;
     float smokeDecayMultiplier = 1f;
     float smokeBuoyancyMultiplier = 1f;
     float temperatureDiffusionMultiplier = 1f;
     float temperatureDecayMultiplier = 1f;
     float temperatureBuoyancyMultiplier = 1f;
+
+    float collisionDampingFactor = 0.1f;
+    float velocityDampingMultiplier = 0.9f;
 
     /// <summary>
     /// Simulation time step in seconds
@@ -37,6 +41,13 @@ public class FluidSimulation {
     /// </summary>
     public FluidGridManager GridManager {
         get { return gridManager; }
+    }
+
+    /// <summary>
+    /// Get the Parcels manager
+    /// </summary>
+    public FluidParcelsManager ParcelsManager {
+        get { return parcelsManager; }
     }
 
     /// <summary>
@@ -90,6 +101,14 @@ public class FluidSimulation {
     }
 
     /// <summary>
+    /// Velocity damping multiplier to add energy loss
+    /// </summary>
+    public float VelocityDampingMultiplier {
+        get { return velocityDampingMultiplier; }
+        set { velocityDampingMultiplier = 1f - Mathf.Clamp(value, 0f, 1f); }
+    }
+
+    /// <summary>
     /// Smoke diffusion multiplier
     /// </summary>
     public float SmokeDiffusionMultiplier {
@@ -137,8 +156,19 @@ public class FluidSimulation {
         set { temperatureBuoyancyMultiplier = Mathf.Max(value, 0); }
     }
 
-    public FluidSimulation(int gridWidth, int gridHeight, ComputeShader gridCompute) {
-        gridManager = new FluidGridManager(gridWidth, gridHeight, gridCompute);
+    /// <summary>
+    /// Factor to control how much energy should be dissipated by the Parcels
+    /// during a collision
+    /// </summary>
+    public float CollisionDampingFactor {
+        get { return collisionDampingFactor; }
+        set { collisionDampingFactor = Mathf.Clamp(value, 0f, 1f); }
+    }
+
+    public FluidSimulation(int gridWidth, int gridHeight, ComputeShader gridCompute, int parcelsCount,
+                           ComputeShader parcelsCompute) {
+        parcelsManager = new FluidParcelsManager(parcelsCount, parcelsCompute);
+        gridManager = new FluidGridManager(gridWidth, gridHeight, gridCompute, parcelsManager);
     }
 
     /// <summary>
@@ -146,7 +176,9 @@ public class FluidSimulation {
     /// </summary>
     public void SetupStep() {
         UpdateGridSettings();
-        gridManager.Setup();
+        UpdateParcelsSettings();
+        parcelsManager.Setup(gridManager);
+        gridManager.Setup(parcelsManager);
     }
 
     /// <summary>
@@ -158,14 +190,25 @@ public class FluidSimulation {
         gridManager.SolvePressure(solverIterations, timeStep);
         gridManager.UpdateVelocities(timeStep);
 
+        parcelsManager.TransferGridData(gridManager);
+        parcelsManager.UpdateAffineState(gridManager);
+
+        parcelsManager.Advect(gridManager, timeStep);
+        parcelsManager.RemoveParcelsOutsideGridBounds();
+        parcelsManager.AddParcelsFromSources(gridManager, timeStep);
+
+        gridManager.TransferParcelsData(parcelsManager, timeStep);
+        gridManager.ApplyForces(timeStep);
+
+        // DEPRECATED: Advection has been moved from the Grid to the Parcels
         // For advection the fluid is required to be divergence free
         // so this step is done immediately after the pressure correction
-        gridManager.AdvectSmoke(timeStep);
-        gridManager.AdvectVelocities(timeStep);
+        // gridManager.AdvectSmoke(timeStep);
+        // gridManager.AdvectVelocities(timeStep);
 
         // Any other step may increase the divergence of the fluid
-        gridManager.AddSmokeFromSources(timeStep);
-        gridManager.AddBuoyancyForce(timeStep);
+        // gridManager.AddSmokeFromSources(timeStep);
+        // gridManager.AddBuoyancyForce(timeStep);
     }
 
     public void HandleInput() {
@@ -178,6 +221,7 @@ public class FluidSimulation {
 
     public void Clean() {
         gridManager.ReleaseTextures();
+        parcelsManager.ReleaseBuffers();
     }
 
     void UpdateGridSettings() {
@@ -196,6 +240,11 @@ public class FluidSimulation {
         gridManager.temperatureDecayMultiplier = temperatureDecayMultiplier;
         gridManager.temperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
         gridManager.obstacles = Obstacles;
+    }
+
+    void UpdateParcelsSettings() {
+        parcelsManager.CollisionDampingFactor = collisionDampingFactor;
+        parcelsManager.VelocityDampingMultiplier = velocityDampingMultiplier;
     }
 }
 }

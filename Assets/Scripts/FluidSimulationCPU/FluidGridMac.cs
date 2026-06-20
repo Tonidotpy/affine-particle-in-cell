@@ -27,12 +27,18 @@ public class FluidGridMac {
     /// <summary>
     /// Grid axis: X is horizontal, Y is vertical
     /// </summary>
-    public enum Axis { X, Y }
+    public enum Axis {
+        X,
+        Y
+    }
 
     /// <summary>
     /// Cell type: represents the content of the cell
     /// </summary>
-    public enum CellType { Fluid, Solid }
+    public enum CellType {
+        Fluid,
+        Solid
+    }
 
     /// <summary>
     /// Data needed to solve the pressure equation using the Gauss-Seidel method
@@ -143,10 +149,8 @@ public class FluidGridMac {
     /// </summary>
     public float TemperatureBuoyancyMultiplier { get; set; }
 
-    public float MaxVelocity => Mathf.Max(
-        velocityU.Cast<float>().Select(Mathf.Abs).Max(),
-        velocityV.Cast<float>().Select(Mathf.Abs).Max()
-    );
+    public float MaxVelocity =>
+        Mathf.Max(velocityU.Cast<float>().Select(Mathf.Abs).Max(), velocityV.Cast<float>().Select(Mathf.Abs).Max());
 
     public FluidGridMac(int width, int height) {
         this.width = width;
@@ -184,12 +188,16 @@ public class FluidGridMac {
     void SetExternalBoundaries() {
         // Treat borders as solid
         for (int i = 0; i < width; ++i) {
-            if (closeBottomEdge) cellType[i, 0] = CellType.Solid;
-            if (closeTopEdge) cellType[i, height - 1] = CellType.Solid;
+            if (closeBottomEdge)
+                cellType[i, 0] = CellType.Solid;
+            if (closeTopEdge)
+                cellType[i, height - 1] = CellType.Solid;
         }
         for (int j = 0; j < height; ++j) {
-            if (closeLeftEdge) cellType[0, j] = CellType.Solid;
-            if (closeRightEdge) cellType[width - 1, j] = CellType.Solid;
+            if (closeLeftEdge)
+                cellType[0, j] = CellType.Solid;
+            if (closeRightEdge)
+                cellType[width - 1, j] = CellType.Solid;
         }
     }
 
@@ -238,12 +246,8 @@ public class FluidGridMac {
     /// <param name="j">Cell coordinate on the vertical axis</param>
     /// <returns>Cell Type of the Cell at coordinate i and j</returns>
     public CellType GetCellType(int i, int j) {
-        return GetCellCenterValue(
-            cellType,
-            Mathf.Clamp(i, 0, width - 1),
-            Mathf.Clamp(j, 0, height - 1),
-            CellType.Fluid
-        );
+        return GetCellCenterValue(cellType, Mathf.Clamp(i, 0, width - 1), Mathf.Clamp(j, 0, height - 1),
+                                  CellType.Fluid);
     }
 
     /// <summary>
@@ -338,17 +342,16 @@ public class FluidGridMac {
         TransferMass(parcels);
         TransferMomentum(parcels);
         // TransferTemperature(parcels);
-        EnforceSolidBuondaryConditions();
+        EnforceSolidBoundaryConditions();
     }
 
-    void EnforceSolidBuondaryConditions() {
+    void EnforceSolidBoundaryConditions() {
         for (int j = 0; j < velocityU.GetLength(1); ++j) {
             for (int i = 0; i < velocityU.GetLength(0); ++i) {
                 float x = i - 0.5f;
                 float y = j;
 
-                if (GetCellType(i, j) == CellType.Solid ||
-                    GetCellType(i - 1, j) == CellType.Solid) {
+                if (GetCellType(i, j) == CellType.Solid || GetCellType(i - 1, j) == CellType.Solid) {
                     SetVelocity(velocityU, x, y, Axis.X, 0);
                 }
             }
@@ -359,8 +362,7 @@ public class FluidGridMac {
                 float x = i;
                 float y = j - 0.5f;
 
-                if (GetCellType(i, j) == CellType.Solid ||
-                    GetCellType(i, j - 1) == CellType.Solid) {
+                if (GetCellType(i, j) == CellType.Solid || GetCellType(i, j - 1) == CellType.Solid) {
                     SetVelocity(velocityV, x, y, Axis.Y, 0);
                 }
             }
@@ -385,12 +387,7 @@ public class FluidGridMac {
 
             int[] x = { xCell, xCell + 1, xCell, xCell + 1 };
             int[] y = { yCell, yCell, yCell + 1, yCell + 1 };
-            float[] weights = {
-                (1f - dx) * (1f - dy),
-                (     dx) * (1f - dy),
-                (1f - dx) * (     dy),
-                (     dx) * (     dy)
-            };
+            float[] weights = { (1f - dx) * (1f - dy), (dx) * (1f - dy), (1f - dx) * (dy), (dx) * (dy) };
             for (int j = 0; j < 4; ++j) {
                 if (IsInCellCenterBounds(x[j], y[j]))
                     mass[x[j], y[j]] += m * weights[j];
@@ -414,12 +411,7 @@ public class FluidGridMac {
 
                 float[] x = { xLeft, xLeft + 1, xLeft, xLeft + 1 };
                 float[] y = { yCell, yCell, yCell + 1, yCell + 1 };
-                float[] weights = {
-                    (1f - dx) * (1f - dy),
-                    (     dx) * (1f - dy),
-                    (1f - dx) * (     dy),
-                    (     dx) * (     dy)
-                };
+                float[] weights = { (1f - dx) * (1f - dy), (dx) * (1f - dy), (1f - dx) * (dy), (dx) * (dy) };
                 for (int j = 0; j < 4; ++j) {
                     float mass = GetCellEdgeValue(massEdgeU, x[j], y[j], Axis.X);
                     mass += m * weights[j];
@@ -437,12 +429,7 @@ public class FluidGridMac {
 
                 float[] x = { xCell, xCell + 1, xCell, xCell + 1 };
                 float[] y = { yBottom, yBottom, yBottom + 1, yBottom + 1 };
-                float[] weights = {
-                    (1f - dx) * (1f - dy),
-                    (     dx) * (1f - dy),
-                    (1f - dx) * (     dy),
-                    (     dx) * (     dy)
-                };
+                float[] weights = { (1f - dx) * (1f - dy), (dx) * (1f - dy), (1f - dx) * (dy), (dx) * (dy) };
                 for (int j = 0; j < 4; ++j) {
                     float mass = GetCellEdgeValue(massEdgeV, x[j], y[j], Axis.Y);
                     mass += m * weights[j];
@@ -475,10 +462,10 @@ public class FluidGridMac {
                 Vector2 dpTopLeft = new Vector2(xLeft - p.x, y + 1 - p.y);
                 Vector2 dpTopRight = new Vector2(xRight - p.x, y + 1 - p.y);
 
-                float wBottomLeft  = (     dpTopRight.x) * (     dpTopRight.y);
-                float wBottomRight = (1f - dpTopRight.x) * (     dpTopRight.y);
-                float wTopLeft     = (     dpTopRight.x) * (1f - dpTopRight.y);
-                float wTopRight    = (1f - dpTopRight.x) * (1f - dpTopRight.y);
+                float wBottomLeft = (dpTopRight.x) * (dpTopRight.y);
+                float wBottomRight = (1f - dpTopRight.x) * (dpTopRight.y);
+                float wTopLeft = (dpTopRight.x) * (1f - dpTopRight.y);
+                float wTopRight = (1f - dpTopRight.x) * (1f - dpTopRight.y);
 
                 float vBottomLeft = GetCellEdgeValue(momentumU, xLeft, y, Axis.X);
                 vBottomLeft += m * wBottomLeft * (v.x + Vector2.Dot(cx, dpBottomLeft));
@@ -511,10 +498,10 @@ public class FluidGridMac {
                 Vector2 dpTopLeft = new Vector2(x - p.x, yTop - p.y);
                 Vector2 dpTopRight = new Vector2(x + 1 - p.x, yTop - p.y);
 
-                float wBottomLeft  = (     dpTopRight.x) * (     dpTopRight.y);
-                float wBottomRight = (1f - dpTopRight.x) * (     dpTopRight.y);
-                float wTopLeft     = (     dpTopRight.x) * (1f - dpTopRight.y);
-                float wTopRight    = (1f - dpTopRight.x) * (1f - dpTopRight.y);
+                float wBottomLeft = (dpTopRight.x) * (dpTopRight.y);
+                float wBottomRight = (1f - dpTopRight.x) * (dpTopRight.y);
+                float wTopLeft = (dpTopRight.x) * (1f - dpTopRight.y);
+                float wTopRight = (1f - dpTopRight.x) * (1f - dpTopRight.y);
 
                 float vBottomLeft = GetCellEdgeValue(momentumV, x, yBottom, Axis.Y);
                 vBottomLeft += m * wBottomLeft * (v.y + Vector2.Dot(cy, dpBottomLeft));
@@ -564,7 +551,7 @@ public class FluidGridMac {
         }
     }
 
-    // DEPRECATED: Temperature truansfer
+    // DEPRECATED: Temperature transfer
     // void TransferTemperature(FluidParcels parcels) {
     //     ClearTemperature();
     //     UpdateParcelsLookupTable(parcels);
@@ -617,12 +604,8 @@ public class FluidGridMac {
                 float velocityTerm = (velocityTop - velocityBottom + velocityRight - velocityLeft) / dt;
 
                 pressureSolverData[i, j] = new PressureSolverData() {
-                    flowTop = flowTop,
-                    flowBottom = flowBottom,
-                    flowRight = flowRight,
-                    flowLeft = flowLeft,
-                    flowEdgeCount = flowEdgeCount,
-                    velocityTerm = velocityTerm
+                    flowTop = flowTop,   flowBottom = flowBottom,       flowRight = flowRight,
+                    flowLeft = flowLeft, flowEdgeCount = flowEdgeCount, velocityTerm = velocityTerm
                 };
             }
         }
@@ -670,10 +653,12 @@ public class FluidGridMac {
                 float y = j;
 
                 CellType centerType = GetCellType(i, j);
-                if (centerType == CellType.Solid) continue;
+                if (centerType == CellType.Solid)
+                    continue;
 
                 CellType leftType = GetCellType(i - 1, j);
-                if (leftType == CellType.Solid) continue;
+                if (leftType == CellType.Solid)
+                    continue;
 
                 float pressureCenter = GetPressure(i, j);
                 float pressureLeft = GetPressure(i - 1, j);
@@ -689,10 +674,12 @@ public class FluidGridMac {
                 float y = j - 0.5f;
 
                 CellType centerType = GetCellType(i, j);
-                if (centerType == CellType.Solid) continue;
+                if (centerType == CellType.Solid)
+                    continue;
 
                 CellType bottomType = GetCellType(i, j - 1);
-                if (bottomType == CellType.Solid) continue;
+                if (bottomType == CellType.Solid)
+                    continue;
 
                 float pressureCenter = GetPressure(i, j);
                 float pressureBottom = GetPressure(i, j - 1);

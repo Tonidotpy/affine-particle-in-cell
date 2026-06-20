@@ -1,0 +1,381 @@
+#pragma kernel Init
+#pragma kernel TransferVelocities
+#pragma kernel UpdateAffineState
+#pragma kernel Advect
+#pragma kernel BitonicSortStep
+#pragma kernel AddParcels
+#pragma kernel UpdateSmokeSources
+
+#include "FluidSimulation.cginc"
+
+// --- Settings --- //
+const float dt;
+const float globalTime;
+const float collisionDampingFactor;
+const float velocityDampingMultiplier;
+
+const uint count;
+const uint powerOfTwoCount;
+const uint2 gridResolution;
+
+// Parcels deletion
+RWStructuredBuffer<int> parcelsToRemove; // 0: parcel to remove, 1: smoke source parcel index
+uint bitonicMajorStepIndex;
+uint bitonicMinorStepIndex;
+
+// Parcels addition
+uint parcelsToAdd;
+float2 parcelsAddOrigin;
+float parcelsAddRadius;
+
+// --- Buffers --- //
+RWStructuredBuffer<ParcelsData> parcelsData;
+Texture2D<float4> cellType; // x: Cell Type, y: Obstacle Index (-1 if no obstacle), z: Pre-Calculated Edges, w: unused
+Texture2D<float2> velocityMap;
+StructuredBuffer<ObstacleData> obstacleData;
+
+// --- Samplers --- //
+Texture2D<float2> velocityMapSample;
+SamplerState sampler_velocityMapSample;
+
+// --- Utilities --- //
+uint2 ClampCoordinates(int i, int j) {
+    return (uint2)clamp(int2(i, j), 0, (int2)gridResolution - 1);
+}
+
+bool IsInCellCenterBounds(int i, int j) {
+    return i >= 0 && i < (int)gridResolution.x && j >= 0 && j < (int)gridResolution.y;
+}
+
+uint GetCellType(int i, int j) {
+    // Cell type outside of boundaries it's assumed to be the same as the one
+    // on the edges
+    return cellType[ClampCoordinates(i, j)].x;
+}
+
+float2 SampleVelocity(float2 position) {
+    // float2(0.5, 0.5) is added to the position because the textures origin is
+    // not at the center of the pixel but on its bottom left corner
+
+    // Horizontal velocity
+    float2 uvX = saturate((position.xy + float2(1, 0.5)) / float2(gridResolution.xy));
+    float velocityX = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvX, 0).x;
+
+    // Vertical velocity
+    float2 uvY = saturate((position.xy + float2(0.5, 1.0)) / float2(gridResolution.xy));
+    float velocityY = velocityMapSample.SampleLevel(sampler_velocityMapSample, uvY, 0).y;
+
+    return float2(velocityX, velocityY);
+}
+
+void InitParcel(uint index, float mass, float2 position, float2 velocity) {
+    parcelsData[index].toRemove = 0;
+    parcelsData[index].mass = mass;
+    parcelsData[index].position = position;
+    parcelsData[index].velocity = velocity;
+    parcelsData[index].cx = 0;
+    parcelsData[index].cy = 0;
+}
+
+// --- Kernels --- //
+[numthreads(64,1,1)]
+void Init(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= powerOfTwoCount) return;
+    parcelsData[id.x].toRemove = 7;
+
+    if (id.x >= count) return;
+    parcelsData[id.x].toRemove = 0;
+
+    if (id.x == 0) {
+        parcelsToRemove[0] = 0;
+        parcelsToRemove[1] = count;
+    }
+}
+
+[numthreads(64,1,1)]
+void TransferVelocities(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+
+    // Reset flags to remove parcels here for simplicity
+    parcelsData[id.x].toRemove = 0;
+
+    float2 v = 0;
+    float2 p = parcelsData[id.x].position;
+
+    // Horizontal velocity
+    {
+        int xEdge = floor(p.x + 0.5);
+        int yCell = floor(p.y);
+        int x[] = { xEdge, xEdge + 1, xEdge, xEdge + 1 };
+        int y[] = { yCell, yCell, yCell + 1, yCell + 1 };
+
+        float2 cellFrac = p.xy - float2(xEdge - 0.5, yCell);
+        float weight[] = {
+            (1.0 - cellFrac.x) * (1.0 - cellFrac.y),
+            (      cellFrac.x) * (1.0 - cellFrac.y),
+            (1.0 - cellFrac.x) * (      cellFrac.y),
+            (      cellFrac.x) * (      cellFrac.y)
+        };
+        for (int j = 0; j < 4; ++j) {
+            uint2 index = ClampCoordinates(x[j], y[j]);
+            float velocity = velocityMap[index].x;
+            v.x += weight[j] * velocity;
+        }
+    }
+
+    // Vertical velocity
+    {
+        int xCell = floor(p.x);
+        int yEdge = floor(p.y + 0.5);
+        int x[] = { xCell, xCell + 1, xCell, xCell + 1 };
+        int y[] = { yEdge, yEdge, yEdge + 1, yEdge + 1 };
+
+        float2 cellFrac = p.xy - float2(xCell, yEdge - 0.5);
+        float weight[] = {
+            (1.0 - cellFrac.x) * (1.0 - cellFrac.y),
+            (      cellFrac.x) * (1.0 - cellFrac.y),
+            (1.0 - cellFrac.x) * (      cellFrac.y),
+            (      cellFrac.x) * (      cellFrac.y)
+        };
+        for (int j = 0; j < 4; ++j) {
+            uint2 index = ClampCoordinates(x[j], y[j]);
+            float velocity = velocityMap[index].y;
+            v.y += weight[j] * velocity;
+        }
+    }
+
+    parcelsData[id.x].velocity = v * velocityDampingMultiplier;
+}
+
+[numthreads(64,1,1)]
+void UpdateAffineState(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+    float2 p = parcelsData[id.x].position;
+
+    // Horizontal axis
+    {
+        int xEdge = floor(p.x + 0.5);
+        int yCell = floor(p.y);
+        int x[] = { xEdge, xEdge + 1, xEdge, xEdge + 1 };
+        int y[] = { yCell, yCell, yCell + 1, yCell + 1 };
+
+        float2 cellFrac = p.xy - float2(xEdge - 0.5, yCell);
+        float2 weightGradient[] = {
+            float2(cellFrac.y - 1, cellFrac.x - 1),
+            float2(1 - cellFrac.y,    -cellFrac.x),
+            float2(   -cellFrac.y, 1 - cellFrac.x),
+            float2(    cellFrac.y,     cellFrac.x)
+        };
+
+        float2 c = 0;
+        for (int j = 0; j < 4; ++j) {
+            uint2 index = ClampCoordinates(x[j], y[j]);
+            float velocity = velocityMap[index].x;
+            c += weightGradient[j] * velocity;
+        }
+        parcelsData[id.x].cx = c;
+    }
+    // Vertical axis
+    {
+        int xCell = floor(p.x);
+        int yEdge = floor(p.y + 0.5);
+        int x[] = { xCell, xCell + 1, xCell, xCell + 1 };
+        int y[] = { yEdge, yEdge, yEdge + 1, yEdge + 1 };
+
+        float2 cellFrac = p.xy - float2(xCell, yEdge - 0.5);
+        float2 weightGradient[] = {
+            float2(cellFrac.y - 1, cellFrac.x - 1),
+            float2(1 - cellFrac.y,    -cellFrac.x),
+            float2(   -cellFrac.y, 1 - cellFrac.x),
+            float2(    cellFrac.y,     cellFrac.x)
+        };
+
+        float2 c = 0;
+        for (int j = 0; j < 4; ++j) {
+            uint2 index = ClampCoordinates(x[j], y[j]);
+            float velocity = velocityMap[index].y;
+            c += weightGradient[j] * velocity;
+        }
+        parcelsData[id.x].cy = c;
+    }
+}
+
+[numthreads(64,1,1)]
+void Advect(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= count) return;
+    float2 p = parcelsData[id.x].position;
+    float2 k1 = parcelsData[id.x].velocity;
+    float2 k2 = SampleVelocity(p + k1 * (dt * 0.5));
+    float2 k3 = SampleVelocity(p + k2 * (dt * 0.5));
+    float2 k4 = SampleVelocity(p + k3 * dt);
+
+    // RK4 implementation
+    float2 dp = (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4);
+    float dpLength = length(dp);
+    if (dpLength == 0) { return; }
+
+    // This adds dissipation but simplify collisions but it does not
+    // happen that frequently. The magnitude usually seats between 0 and 1
+    if (dpLength > 1) {
+        dp /= dpLength;
+    }
+
+    float2 positionNext = p + dp;
+    int2 cellPosition = floor(positionNext + 0.5);
+
+    if (GetCellType(cellPosition.x, cellPosition.y) == CELL_TYPE_SOLID) {
+        int2 cellHorizontalNext = cellPosition + int2(dp.x >= 0 ? 1 : -1, 0);
+        int2 cellVerticalNext = cellPosition + int2(0, dp.y >= 0 ? 1 : -1);
+
+        bool isHorizontalSolid = GetCellType(cellHorizontalNext.x, cellHorizontalNext.y) == CELL_TYPE_SOLID;
+        bool isVerticalSolid = GetCellType(cellVerticalNext.x, cellVerticalNext.y) == CELL_TYPE_SOLID;
+
+        if (isHorizontalSolid) {
+            k1.x *= -1 * (1.0 - collisionDampingFactor);
+            positionNext.x = p.x;
+        }
+        if (isVerticalSolid) {
+            k1.y *= -1 * (1.0 - collisionDampingFactor);
+            positionNext.y = p.y;
+        }
+
+        if (!isHorizontalSolid && !isVerticalSolid) {
+            if (abs(dp.x) < abs(dp.y)) {
+                k1.x *= -1 * (1.0 - collisionDampingFactor);
+                positionNext.x = p.x;
+            } else {
+                k1.y *= -1 * (1.0 - collisionDampingFactor);
+                positionNext.y = p.y;
+            }
+        }
+
+        int2 cellFinalPosition = floor(positionNext + 0.5);
+        if (GetCellType(cellFinalPosition.x, cellFinalPosition.y) != CELL_TYPE_FLUID) {
+            positionNext = p;
+            k1 *= -1 * (1.0 - collisionDampingFactor);
+        }
+
+    }
+    parcelsData[id.x].velocity = k1;
+    parcelsData[id.x].position = positionNext;
+
+    // Mark the Parcel as 'to be removed' if outside of the Grid boundaries but
+    // not near enough to contribute to the Cells at the edges of the Grid
+    if (positionNext.x < -1.0 || positionNext.x > (float)gridResolution.x ||
+        positionNext.y < -1.0 || positionNext.y > (float)gridResolution.y) {
+        parcelsData[id.x].toRemove = 1;
+        InterlockedAdd(parcelsToRemove[0], 1);
+    }
+}
+
+[numthreads(64,1,1)]
+void BitonicSortStep(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= powerOfTwoCount) return;
+    uint i = id.x;
+    uint l = i ^ bitonicMinorStepIndex;
+
+    /* The threads with the lowest ids sort the array. */
+    if (l > i) {
+        int2 toRemove = int2(parcelsData[i].toRemove, parcelsData[l].toRemove);
+
+        if ((i & bitonicMajorStepIndex) == 0) {
+            /* Sort ascending */
+            if (toRemove.x > toRemove.y) {
+                SWAP(parcelsData[i], parcelsData[l], struct ParcelsData);
+            }
+        }
+        else if ((i & bitonicMajorStepIndex) != 0) {
+            /* Sort descending */
+            if (toRemove.x < toRemove.y) {
+                SWAP(parcelsData[i], parcelsData[l], struct ParcelsData);
+            }
+        }
+    }
+}
+
+[numthreads(64,1,1)]
+void AddParcels(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= parcelsToAdd) return;
+
+    uint index = count + id.x;
+
+    float2 angleSeed = Random2(float2(id.x, cos(index * 12535.0345)));
+    float2 lengthSeed = Random2(angleSeed);
+
+    float angle = Random1(angleSeed) * 2 * PI;
+    float2 direction = float2(cos(angle), sin(angle));
+    float2 offset = direction * parcelsAddRadius * Random1(lengthSeed);
+
+    float2 position = parcelsAddOrigin + offset;
+    InitParcel(index, 1, position, 0);
+}
+
+[numthreads(8,8,1)]
+void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= gridResolution.x || id.y >= gridResolution.y) return;
+    if (GetCellType(id.x, id.y) != CELL_TYPE_FLUID) return;
+
+    if (Random1(id.xy * (globalTime % dt)) >= 0.03) return;
+
+    bool isEdgeLeft = ((uint)cellType[id.xy].z & (1 << EDGE_LEFT_BIT_POS)) != 0;
+    bool isEdgeBottom = ((uint)cellType[id.xy].z & (1 << EDGE_BOTTOM_BIT_POS)) != 0;
+    bool isEdgeRight = ((uint)cellType[id.xy].z & (1 << EDGE_RIGHT_BIT_POS)) != 0;
+    bool isEdgeTop = ((uint)cellType[id.xy].z & (1 << EDGE_TOP_BIT_POS)) != 0;
+
+    int obstacleIndexLeft = cellType[ClampCoordinates(id.x - 1, id.y)].y;
+    int obstacleIndexBottom = cellType[ClampCoordinates(id.x, id.y - 1)].y;
+    int obstacleIndexRight = cellType[ClampCoordinates(id.x + 1, id.y)].y;
+    int obstacleIndexTop = cellType[ClampCoordinates(id.x, id.y + 1)].y;
+
+    int smokeContribution = 0;
+    float2 velocityContribution = 0;
+    float smokeRate = 0;
+
+    if (isEdgeLeft && obstacleIndexLeft >= 0) {
+        ObstacleData obstacle = obstacleData[obstacleIndexLeft];
+        if (obstacle.isSmokeSource) {
+            smokeRate += obstacle.smokeRate * obstacle.smokeRateMultiplier;
+            velocityContribution += obstacle.velocitySource;
+            ++smokeContribution;
+        }
+    }
+    if (isEdgeBottom && obstacleIndexBottom >= 0) {
+        ObstacleData obstacle = obstacleData[obstacleIndexBottom];
+        if (obstacle.isSmokeSource) {
+            smokeRate += obstacle.smokeRate * obstacle.smokeRateMultiplier;
+            velocityContribution += obstacle.velocitySource;
+            ++smokeContribution;
+        }
+    }
+    if (isEdgeRight && obstacleIndexRight >= 0) {
+        ObstacleData obstacle = obstacleData[obstacleIndexRight];
+        if (obstacle.isSmokeSource) {
+            smokeRate += obstacle.smokeRate * obstacle.smokeRateMultiplier;
+            velocityContribution += obstacle.velocitySource;
+            ++smokeContribution;
+        }
+    }
+    if (isEdgeTop && obstacleIndexTop >= 0) {
+        ObstacleData obstacle = obstacleData[obstacleIndexTop];
+        if (obstacle.isSmokeSource) {
+            smokeRate += obstacle.smokeRate * obstacle.smokeRateMultiplier;
+            velocityContribution += obstacle.velocitySource;
+            ++smokeContribution;
+        }
+    }
+
+    if (smokeContribution > 0) {
+        uint index = 0;
+        InterlockedAdd(parcelsToRemove[1], 1, index);
+
+        if (index < powerOfTwoCount) {
+            float angle = Random1(velocityContribution * id.xy) * 2 * PI;
+            float2 direction = float2(cos(angle), sin(angle));
+            float2 offset = direction * Random1(id.xy + velocityContribution);
+            float2 position = id.xy + offset;
+            float2 velocity = velocityContribution / smokeContribution;
+            float mass = smokeRate / smokeContribution;
+            InitParcel(index, mass, position, velocity);
+        }
+    }
+}

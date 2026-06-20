@@ -5,29 +5,28 @@ Shader "Unlit/FluidRenderer" {
         Blend SrcAlpha OneMinusSrcAlpha
         Tags{ "RenderType" = "Opaque" } LOD 100
 
-            Pass {
+        Pass {
             CGPROGRAM
-#pragma vertex vert
-#pragma fragment frag
+            #pragma vertex vert
+            #pragma fragment frag
 
-#include "UnityCG.cginc"
+            #include "UnityCG.cginc"
+            #include "FluidSimulation.cginc"
 
-// Cell types
-#define CELL_TYPE_SOLID (0)
-#define CELL_TYPE_FLUID (1)
+            // Velocity channels
+            #define VELOCITY_CHANNEL_X (0)
+            #define VELOCITY_CHANNEL_Y (1)
+            #define VELOCITY_CHANNEL_BOTH (2)
 
-// Velocity channels
-#define VELOCITY_CHANNEL_X (0)
-#define VELOCITY_CHANNEL_Y (1)
-#define VELOCITY_CHANNEL_BOTH (2)
-
-// Visualization modes
-#define VISUALIZATION_MODE_DEBUG (0)
-#define VISUALIZATION_MODE_VELOCITY (1)
-#define VISUALIZATION_MODE_DIVERGENCE (2)
-#define VISUALIZATION_MODE_PRESSURE (3)
-#define VISUALIZATION_MODE_TEMPERATURE (4)
-#define VISUALIZATION_MODE_SMOKE (5)
+            // Visualization modes
+            #define VISUALIZATION_MODE_DEBUG (0)
+            #define VISUALIZATION_MODE_MOMENTUM (1)
+            #define VISUALIZATION_MODE_VELOCITY (2)
+            #define VISUALIZATION_MODE_DIVERGENCE (3)
+            #define VISUALIZATION_MODE_PRESSURE (4)
+            #define VISUALIZATION_MODE_TEMPERATURE (5)
+            #define VISUALIZATION_MODE_SMOKE (6)
+            #define VISUALIZATION_MODE_PARCELS (7)
 
             struct appdata {
                 float4 vertex : POSITION;
@@ -39,13 +38,18 @@ Shader "Unlit/FluidRenderer" {
                 float4 vertex : SV_POSITION;
             };
 
-            int2 resolution;
+            float2 resolution;
             int visualizationMode;
             sampler2D debugMap;
 
             // Obstacles
             sampler2D cellType;
             fixed4 obstacleColor;
+
+            // Momentum
+            sampler2D momentumMap;
+            float momentumDisplayRange;
+            int momentumChannel;
 
             // Velocity
             sampler2D velocityMap;
@@ -88,6 +92,16 @@ Shader "Unlit/FluidRenderer" {
             fixed4 RenderDebug(v2f i) {
                 float4 val = tex2D(debugMap, i.uv);
                 fixed4 col = fixed4(val.xyz, 1);
+                return col;
+            }
+
+            fixed4 RenderMomentum(v2f i) {
+                float2 momentum = tex2D(momentumMap, i.uv).rg;
+                fixed4 col = fixed4(0, 0, 0, 1);
+                if (momentumChannel == VELOCITY_CHANNEL_X || momentumChannel == VELOCITY_CHANNEL_BOTH)
+                    col.r = abs(momentum.x * momentumDisplayRange);
+                if (momentumChannel == VELOCITY_CHANNEL_Y || momentumChannel == VELOCITY_CHANNEL_BOTH)
+                    col.g = (momentum.y * momentumDisplayRange);
                 return col;
             }
 
@@ -157,6 +171,8 @@ Shader "Unlit/FluidRenderer" {
 
                 if (visualizationMode == VISUALIZATION_MODE_DEBUG)
                     col = RenderDebug(i);
+                else if (visualizationMode == VISUALIZATION_MODE_MOMENTUM)
+                    col = RenderMomentum(i);
                 else if (visualizationMode == VISUALIZATION_MODE_VELOCITY)
                     col = RenderVelocity(i);
                 else if (visualizationMode == VISUALIZATION_MODE_DIVERGENCE)
@@ -172,6 +188,84 @@ Shader "Unlit/FluidRenderer" {
                     col = RenderObstacle(i, col);
                 return col;
             }
+            ENDCG
+        }
+        Pass {
+            ZTest Always
+            ZWrite Off
+            Blend SrcAlpha OneMinusSrcAlpha
+
+            CGPROGRAM
+
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma target 4.5
+
+            #include "UnityCG.cginc"
+            #include "FluidSimulation.cginc"
+
+            struct appdata {
+                uint id : SV_VertexID;
+                float2 uv : TEXCOORD0;
+            };
+
+            struct v2f {
+                float4 position : SV_POSITION;
+                float2 uv       : TEXCOORD0;
+                fixed4 color    : COLOR;
+            };
+
+            float cellSize;
+            float2 resolution;
+
+            int parcelsPassActive;
+            StructuredBuffer<ParcelsData> parcelsData;
+            float parcelSmoothingRadius;
+            fixed4 parcelColor;
+
+            static const float2 corners[6] = {
+                float2(-1, -1), float2(1, 1), float2(1, -1), // First triangle
+                float2(-1, -1), float2(-1, 1), float2(1, 1)  // Second triangle
+            };
+
+            v2f vert(appdata v) {
+                if (parcelsPassActive == 0) {
+                    v2f o;
+                    o.position = float4(2, 2, 2, 1); // outside [-1,1] clip cube → culled
+                    o.uv = 2;
+                    o.color = 0;
+                    return o;
+                }
+
+                uint parcelIndex = v.id / 6;
+                uint cornerIndex = v.id % 6;
+
+                float2 p = parcelsData[parcelIndex].position;
+                float2 worldPosition = (p - (resolution - 1) * 0.5) * cellSize;
+
+                float2 localUV = corners[cornerIndex];
+                float2 cornerPosition = worldPosition + localUV * parcelSmoothingRadius;
+
+                v2f o;
+                o.position = UnityWorldToClipPos(float4(cornerPosition, 0, 1));
+                o.uv = localUV;
+                o.color = parcelsData[parcelIndex].toRemove > 0 ?
+                                fixed4(1, 0, 0, 1) :
+                                parcelColor;
+                return o;
+            }
+
+            fixed4 frag(v2f i) : SV_Target {
+                float r = length(i.uv);
+                if (r > 1.0)
+                    discard;
+
+                float volume = 4.0 * PI / 3.0;
+                float q = r - 1.0;
+                float w = q * q / volume;
+                return fixed4(i.color.rgb, i.color.a * w);
+            }
+
             ENDCG
         }
     }

@@ -6,7 +6,7 @@ namespace FluidSimulationGPU {
 [RequireComponent(typeof(FluidRendererManager))]
 public class Test : MonoBehaviour {
     [Header("Grid Settings")]
-    public ComputeShader compute;
+    public ComputeShader gridCompute;
     public Vector2Int resolution = new(50, 50);
     public float fluidDensity = 1.3f; // kg/m^2
 
@@ -14,6 +14,13 @@ public class Test : MonoBehaviour {
     public bool closeBottomEdge = false;
     public bool closeRightEdge = false;
     public bool closeTopEdge = false;
+
+    [Header("Parcels Settings")]
+    public ComputeShader parcelsCompute;
+    public int count = 100;
+
+    [Range(0f, 1f)]
+    public float collisionDampingFactor = 0.1f;
 
     [Header("Simulation Settings")]
     public int solverIterations = 15;
@@ -24,10 +31,13 @@ public class Test : MonoBehaviour {
     public bool isSimulationPaused = false;
 
     [Header("Velocity Settings")]
+    [Range(0f, 1f)]
+    public float velocityDampingMultiplier = 0.1f;
     public float velocityMultiplier = 5f;
 
     [Header("Smoke Settings")]
-    public float smokeAmount = 0.2f;
+    [Min(1)]
+    public int smokeAmount = 10;
     public float smokeTemperature = 26f; // °C
     public float smokeDiffusionMultiplier = 0.3f;
     public float smokeDecayMultiplier = 1f;
@@ -48,9 +58,10 @@ public class Test : MonoBehaviour {
     }
 
     void Start() {
-        simulation = new FluidSimulation(resolution.x, resolution.y, compute);
+        simulation = new FluidSimulation(resolution.x, resolution.y, gridCompute, count, parcelsCompute);
         simulationRenderer = GetComponent<FluidRendererManager>();
         simulationRenderer.SetGridToRender(simulation.GridManager);
+        simulationRenderer.SetParcelsToRender(simulation.ParcelsManager);
 
         Camera.main.orthographicSize = resolution.y * simulationRenderer.cellSize * 0.6f;
     }
@@ -82,6 +93,7 @@ public class Test : MonoBehaviour {
         simulation.Gravity = gravity;
         simulation.FluidDensity = fluidDensity;
         simulation.AmbientTemperature = ambientTemperature;
+        simulation.VelocityDampingMultiplier = velocityDampingMultiplier;
         simulation.SmokeDiffusionMultiplier = smokeDiffusionMultiplier;
         simulation.SmokeDecayMultiplier = smokeDecayMultiplier;
         simulation.SmokeBuoyancyMultiplier = smokeBuoyancyMultiplier;
@@ -89,8 +101,8 @@ public class Test : MonoBehaviour {
         simulation.TemperatureDecayMultiplier = temperatureDecayMultiplier;
         simulation.TemperatureBuoyancyMultiplier = temperatureBuoyancyMultiplier;
 
-        FluidObstacle[] obstacles = GameObject.FindObjectsByType<FluidObstacle>(
-                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        FluidObstacle[] obstacles =
+            GameObject.FindObjectsByType<FluidObstacle>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
         Array.ForEach(obstacles, obstacle => obstacle.Origin = simulationRenderer.HalfWorldSize);
         simulation.Obstacles = obstacles;
     }
@@ -122,9 +134,8 @@ public class Test : MonoBehaviour {
         }
 
         if (isMouseRightHeld) {
-            Vector2Int cellCenter = simulationRenderer.WorldToCellCenter(mousePosition);
-            simulation.GridManager.AddSmokeAtPosition(cellCenter, mouseInputRadius, smokeAmount,
-                                                      simulationRenderer.smokeColor, CelsiusToKelvin(smokeTemperature));
+            Vector2Int origin = simulationRenderer.WorldToCellCenter(mousePosition);
+            simulation.ParcelsManager.AddParcelsAtPosition(origin, mouseInputRadius, smokeAmount);
         }
 
         simulationRenderer.inputRadius = Mathf.Max(0, simulationRenderer.inputRadius + mouseScrollDelta * 0.1f);
