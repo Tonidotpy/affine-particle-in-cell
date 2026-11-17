@@ -224,37 +224,30 @@ void Advect(uint3 id : SV_DispatchThreadID) {
     int2 cellPosition = floor(positionNext + 0.5);
 
     if (GetCellType(cellPosition.x, cellPosition.y) == CELL_TYPE_SOLID) {
-        int2 cellHorizontalNext = cellPosition + int2(dp.x >= 0 ? 1 : -1, 0);
-        int2 cellVerticalNext = cellPosition + int2(0, dp.y >= 0 ? 1 : -1);
+      float2 normal = float2(
+          (GetCellType(cellPosition.x - 1, cellPosition.y) == CELL_TYPE_FLUID ? -1.0 : 0.0) +
+          (GetCellType(cellPosition.x + 1, cellPosition.y) == CELL_TYPE_FLUID ?  1.0 : 0.0),
+          (GetCellType(cellPosition.x, cellPosition.y - 1) == CELL_TYPE_FLUID ? -1.0 : 0.0) +
+          (GetCellType(cellPosition.x, cellPosition.y + 1) == CELL_TYPE_FLUID ?  1.0 : 0.0)
+      );
 
-        bool isHorizontalSolid = GetCellType(cellHorizontalNext.x, cellHorizontalNext.y) == CELL_TYPE_SOLID;
-        bool isVerticalSolid = GetCellType(cellVerticalNext.x, cellVerticalNext.y) == CELL_TYPE_SOLID;
+      if (dot(normal, normal) > 0) {
+          normal = normalize(normal);
+          // Remove inward normal velocity, keep tangential velocity (free-slip)
+          float vn = dot(k1, normal);
+          if (vn < 0) {
+              k1 -= (1.0 + (1.0 - collisionDampingFactor)) * vn * normal;
+          }
+          // Slide tangentially and nudge slightly out of the solid cell
+          positionNext = p + k1 * dt + normal * 0.05;
+      } else {
+          positionNext = p;
+      }
 
-        if (isHorizontalSolid) {
-            k1.x *= -1 * (1.0 - collisionDampingFactor);
-            positionNext.x = p.x;
-        }
-        if (isVerticalSolid) {
-            k1.y *= -1 * (1.0 - collisionDampingFactor);
-            positionNext.y = p.y;
-        }
-
-        if (!isHorizontalSolid && !isVerticalSolid) {
-            if (abs(dp.x) < abs(dp.y)) {
-                k1.x *= -1 * (1.0 - collisionDampingFactor);
-                positionNext.x = p.x;
-            } else {
-                k1.y *= -1 * (1.0 - collisionDampingFactor);
-                positionNext.y = p.y;
-            }
-        }
-
-        int2 cellFinalPosition = floor(positionNext + 0.5);
-        if (GetCellType(cellFinalPosition.x, cellFinalPosition.y) != CELL_TYPE_FLUID) {
-            positionNext = p;
-            k1 *= -1 * (1.0 - collisionDampingFactor);
-        }
-
+      int2 finalCell = floor(positionNext + 0.5);
+      if (GetCellType(finalCell.x, finalCell.y) == CELL_TYPE_SOLID) {
+          positionNext = p;
+      }
     }
     parcelsData[id.x].velocity = k1;
     parcelsData[id.x].position = positionNext;
@@ -333,7 +326,7 @@ void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
 
     if (isEdgeLeft && obstacleIndexLeft >= 0) {
         ObstacleData obstacle = obstacleData[obstacleIndexLeft];
-        if (obstacle.isSmokeSource) {
+        if (obstacle.isSmokeSource && obstacle.velocitySource.x > 0) {
             smokeRate += obstacle.smokeRate * obstacle.smokeRateMultiplier;
             velocityContribution += obstacle.velocitySource;
             ++smokeContribution;
@@ -341,7 +334,7 @@ void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
     }
     if (isEdgeBottom && obstacleIndexBottom >= 0) {
         ObstacleData obstacle = obstacleData[obstacleIndexBottom];
-        if (obstacle.isSmokeSource) {
+        if (obstacle.isSmokeSource && obstacle.velocitySource.y > 0) {
             smokeRate += obstacle.smokeRate * obstacle.smokeRateMultiplier;
             velocityContribution += obstacle.velocitySource;
             ++smokeContribution;
@@ -349,7 +342,7 @@ void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
     }
     if (isEdgeRight && obstacleIndexRight >= 0) {
         ObstacleData obstacle = obstacleData[obstacleIndexRight];
-        if (obstacle.isSmokeSource) {
+        if (obstacle.isSmokeSource && obstacle.velocitySource.x < 0) {
             smokeRate += obstacle.smokeRate * obstacle.smokeRateMultiplier;
             velocityContribution += obstacle.velocitySource;
             ++smokeContribution;
@@ -357,7 +350,7 @@ void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
     }
     if (isEdgeTop && obstacleIndexTop >= 0) {
         ObstacleData obstacle = obstacleData[obstacleIndexTop];
-        if (obstacle.isSmokeSource) {
+        if (obstacle.isSmokeSource && obstacle.velocitySource.y < 0) {
             smokeRate += obstacle.smokeRate * obstacle.smokeRateMultiplier;
             velocityContribution += obstacle.velocitySource;
             ++smokeContribution;
@@ -371,6 +364,7 @@ void UpdateSmokeSources(uint3 id : SV_DispatchThreadID) {
         if (index < powerOfTwoCount) {
             float angle = Random1(velocityContribution * id.xy) * 2 * PI;
             float2 direction = float2(cos(angle), sin(angle));
+            // float2 offset = (Random2(id.xy + velocityContribution) - 0.5) * 0.9;
             float2 offset = direction * Random1(id.xy + velocityContribution);
             float2 position = id.xy + offset;
             float2 velocity = velocityContribution / smokeContribution;

@@ -25,6 +25,8 @@
 #pragma kernel UpdateSmokeSources
 #pragma kernel UpdateVelocitySources
 #pragma kernel ClearObstacles
+#pragma kernel EnforceSolidBoundaryConditions
+#pragma kernel P2GComputeVelocities
 
 #include "FluidSimulation.cginc"
 
@@ -993,3 +995,37 @@ void ClearObstacles(uint3 id : SV_DispatchThreadID) {
     if (id.x >= resolution.x || id.y >= resolution.y) return;
     cellType[id.xy] = float4(CELL_TYPE_FLUID, -1, 0, 0);
 }
+
+[numthreads(8,8,1)]
+void EnforceSolidBoundaryConditions(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+
+    bool isSolid       = GetCellType(id.x, id.y)     == CELL_TYPE_SOLID;
+    bool isSolidLeft   = GetCellType(id.x - 1, id.y) == CELL_TYPE_SOLID;
+    bool isSolidBottom = GetCellType(id.x, id.y - 1) == CELL_TYPE_SOLID;
+
+    float2 v = velocityMap[id.xy];
+    if (isSolid || isSolidLeft)   v.x = 0;  // only the normal component of each face
+    if (isSolid || isSolidBottom) v.y = 0;
+    velocityMap[id.xy] = v;
+}
+
+[numthreads(8,8,1)]
+void P2GComputeVelocities(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= resolution.x || id.y >= resolution.y) return;
+
+    float2 mass = edgeMassMap[id.xy];
+    float2 momentum = edgeMomentumMap[id.xy];
+    float2 v = velocityMap[id.xy];
+
+    // Only overwrite faces that received parcel mass (keeps existing grid flow elsewhere)
+    if (mass.x > 1e-6) {
+        v.x = momentum.x / mass.x;
+    }
+    if (mass.y > 1e-6) {
+        v.y = momentum.y / mass.y;
+    }
+
+    velocityMap[id.xy] = v;
+}
+

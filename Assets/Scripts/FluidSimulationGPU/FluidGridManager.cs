@@ -33,7 +33,9 @@ public class FluidGridManager {
         UpdateObstacleEdges,
         UpdateSmokeSources,
         UpdateVelocitySources,
-        ClearObstacles
+        ClearObstacles,
+        EnforceSolidBoundaryConditions,
+        P2GComputeVelocities
     }
 
     /// <summary>
@@ -247,6 +249,7 @@ public class FluidGridManager {
         PrefixSum(bufferSize, powerOfTwoBufferSize);
 
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.P2GTransferData);
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.P2GComputeVelocities);
     }
 
     /// <summary>
@@ -315,6 +318,7 @@ public class FluidGridManager {
         compute.SetFloat("density", density);
         compute.SetFloat("sor", sorMultiplier);
 
+        ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.EnforceSolidBoundaryConditions);
         ComputeHelper.Dispatch(compute, resolution.x, resolution.y, ComputeKernel.PreparePressureSolver);
         for (int i = 0; i < iterations * 2; ++i) {
             compute.SetFloat("solverPassIndex", i % 2);

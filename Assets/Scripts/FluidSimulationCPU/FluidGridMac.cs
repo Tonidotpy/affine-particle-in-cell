@@ -405,7 +405,6 @@ public class FluidGridMac {
                 int xEdge = Mathf.RoundToInt(p.x);
                 int yCell = Mathf.FloorToInt(p.y);
                 float xLeft = xEdge - 0.5f;
-
                 float dx = p.x - xLeft;
                 float dy = p.y - yCell;
 
